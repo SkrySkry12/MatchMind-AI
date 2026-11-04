@@ -52,7 +52,7 @@ function addBuilder(){
   out.innerHTML='<h3>Analiza wybranych spotkań</h3><p class="muted">Pobieram historię, formę i dostępne informacje dla '+chosen.length+' meczów. To może chwilę potrwać.</p>';
   const results=await Promise.all(chosen.map(async m=>{
    try{
-    const response=await fetch('/api/matches/'+encodeURIComponent(m.id)+'/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixture:m}),signal:AbortSignal.timeout(55000)});
+    const response=await fetch('/api/matches/'+encodeURIComponent(m.id)+'/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixture:m,forceRefresh:true}),signal:AbortSignal.timeout(55000)});
     const data=await response.json();if(!response.ok)throw new Error(data.error||'Błąd analizy');
     return {m,data};
    }catch(error){return {m,error:error.message};}

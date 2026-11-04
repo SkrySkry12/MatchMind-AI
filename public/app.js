@@ -31,7 +31,7 @@ async function openMatch(m){
  $('mm-title').textContent=m.home.name+' — '+m.away.name;$('mm-meta').textContent=m.league+' · '+new Date(m.date).toLocaleString('pl-PL');
  document.querySelectorAll('[data-dismiss]').forEach(x=>x.onclick=()=>{modal.hidden=true;activeModalMatch=null;if(liveRefreshTimer){clearInterval(liveRefreshTimer);liveRefreshTimer=null;}});
  $('mm-body').innerHTML='<div class="loading">Pobieram wynik, statystyki i zdarzenia…</div><section><h3>Analiza MatchMind</h3><div id="mm-ai-report" class="mm-report">Przygotowuję raport AI…</div></section>';
- refreshMatchOverview(m).catch(e=>{$('mm-body').innerHTML='<p class="mm-empty">'+safe(e.message)+'</p>';});
+ refreshMatchOverview(m).catch(e=>{$('mm-body').innerHTML='<section><div class="mm-live-row"><h3>Szczegóły meczu</h3><span>Ograniczone dane</span></div><p class="mm-empty">SportScore nie zwrócił szczegółów spotkania: '+safe(e.message)+'. Raport poniżej spróbuje wykorzystać dane z terminarza.</p></section><section><h3>Analiza MatchMind</h3><div id="mm-ai-report" class="mm-report">Przygotowuję analizę na podstawie terminarza…</div></section>';});
  fetch('/api/matches/'+encodeURIComponent(m.id)+'/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixture:m})}).then(r=>r.json()).then(a=>{
   if(!$('match-modal')||$('match-modal').hidden||activeModalMatch?.id!==m.id)return;
   const target=$('mm-ai-report');if(target){target.textContent=a.report||a.error||'Brak raportu';target.insertAdjacentHTML('beforebegin','<p class="mm-cache-note">'+(a.cached?'Raport z cache':'Raport wygenerowany przez AI')+'</p>');}

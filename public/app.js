@@ -1,23 +1,38 @@
 
 const pickedMatches=new Set();
-function openMatch(m){
- if(!m)return;
+let liveRefreshTimer=null,activeModalMatch=null;
+function renderMatchOverview(data,m){
+ const fixture=data.fixture?.[0],goals=fixture?.goals||{},events=Array.isArray(data.events)?data.events:[];
+ const teams=data.statistics||[];
+ const statNames=[['Posiadanie piłki','Ball Possession'],['Strzały','Total Shots'],['Strzały celne','Shots on Goal'],['Rzuty rożne','Corner Kicks'],['Faule','Fouls'],['Żółte kartki','Yellow Cards'],['Czerwone kartki','Red Cards'],['Spalone',' offsides']];
+ const get=(team,key)=>(team?.statistics||[]).find(v=>String(v.type).toLowerCase()===key.toLowerCase())?.value??'—';
+ const statHtml=teams.length?'<div class="mm-team-head"><span>'+safe(teams[0]?.team?.name||m.home.name)+'</span><span>'+safe(teams[1]?.team?.name||m.away.name)+'</span></div><div class="mm-stats">'+statNames.map(([label,key])=>'<div class="mm-stat"><span>'+label+'</span><strong>'+safe(get(teams[0],key))+' <i>·</i> '+safe(get(teams[1],key))+'</strong></div>').join('')+'</div>':'<p class="mm-empty">Statystyki nie są jeszcze dostępne od API-FOOTBALL. Przed meczem to normalne.</p>';
+ const goalsHtml=events.filter(e=>/goal/i.test(String(e.type))||/goal/i.test(String(e.detail))).map(e=>'<div class="mm-event"><b>'+safe(e.time?.elapsed??'?')+'’</b><span>'+safe(e.team?.name||'')+'</span><strong>'+safe(e.player?.name||e.detail||'Gol')+'</strong><small>'+safe(e.detail||'')+'</small></div>').join('');
+ const score=goals.home!=null&&goals.away!=null?'<div class="mm-score"><span>'+safe(m.home.name)+'</span><strong>'+goals.home+' : '+goals.away+'</strong><span>'+safe(m.away.name)+'</span></div>':'';
+ const status=fixture?.fixture?.status?.long||fixture?.fixture?.status?.short||'Status nieznany';
+ const eventsHtml=goalsHtml||'<p class="mm-empty">Brak zdarzeń bramkowych w danych dostawcy.</p>';
+ const body=$('mm-body');
+ const report=body.querySelector('#mm-ai-report')?.outerHTML||'<div id="mm-ai-report" class="mm-report">Analiza AI ładuje się niezależnie od statystyk…</div>';
+ body.innerHTML='<section><div class="mm-live-row"><h3>Wynik i przebieg</h3><span class="'+(data.live?'mm-live':'')+'">'+safe(status)+(data.live?' · NA ŻYWO':'')+'</span></div>'+score+'</section><section><h3>Statystyki meczu</h3>'+statHtml+'</section><section><h3>Bramki</h3>'+eventsHtml+'</section><section><h3>Analiza MatchMind</h3>'+report+'</section>';
+}
+async function refreshMatchOverview(m){
+ const r=await fetch('/api/matches/'+encodeURIComponent(m.id)+'/overview');const d=await r.json();if(!r.ok)throw new Error(d.error||'Nie udało się pobrać danych meczu');
+ if(!$('match-modal')||$('match-modal').hidden)return;
+ renderMatchOverview(d,m);
+ if(d.live){if(liveRefreshTimer)clearInterval(liveRefreshTimer);liveRefreshTimer=setInterval(async()=>{if(!$('match-modal')||$('match-modal').hidden||!activeModalMatch){clearInterval(liveRefreshTimer);liveRefreshTimer=null;return;}try{await refreshMatchOverview(activeModalMatch);}catch(e){}} ,30000);}else if(liveRefreshTimer){clearInterval(liveRefreshTimer);liveRefreshTimer=null;}
+}
+async function openMatch(m){
+ if(!m)return;activeModalMatch=m;
  if(!document.getElementById('match-modal'))document.body.insertAdjacentHTML('beforeend','<div class="match-modal" id="match-modal" hidden><div class="match-modal-shade" data-dismiss></div><section class="match-modal-card"><header><div><p class="eyebrow">MATCHMIND INSIGHT</p><h2 id="mm-title"></h2><p id="mm-meta" class="muted"></p></div><button class="mm-close" data-dismiss>×</button></header><div id="mm-body" class="mm-body">Pobieranie danych…</div></section></div>');
- const modal=document.getElementById('match-modal');modal.hidden=false;
- document.getElementById('mm-title').textContent=m.home.name+' — '+m.away.name;
- document.getElementById('mm-meta').textContent=m.league+' · '+new Date(m.date).toLocaleString('pl-PL');
- document.querySelectorAll('[data-dismiss]').forEach(x=>x.onclick=()=>modal.hidden=true);
- const body=document.getElementById('mm-body');body.textContent='Pobieram statystyki i przygotowuję analizę…';
- Promise.all([
- fetch('/api/matches/'+encodeURIComponent(m.id)+'/stats').then(x=>x.json()),
- fetch('/api/matches/'+encodeURIComponent(m.id)+'/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixture:m})}).then(x=>x.json())
- ]).then(([s,a])=>{
- const teams=s.stats||[];
- const statNames=[['Posiadanie piłki','Ball Possession'],['Strzały','Total Shots'],['Strzały celne','Shots on Goal'],['Rzuty rożne','Corner Kicks'],['Faule','Fouls'],['Żółte kartki','Yellow Cards']];
- const get=(key)=>teams.map(t=>(t.statistics||[]).find(v=>v.type===key)?.value??'—');
- const tiles=statNames.map(([label,key])=>{const v=get(key);return '<div class="mm-stat"><span>'+label+'</span><strong>'+v.join(' : ')+'</strong></div>';}).join('');
- body.innerHTML='<section><h3>Statystyki meczu</h3>'+(teams.length?'<div class="mm-stats">'+tiles+'</div>':'<p class="mm-empty">Brak statystyk od dostawcy. Dla spotkań przed rozpoczęciem to normalne.</p>')+'</section><section><h3>Analiza MatchMind</h3><p class="mm-cache-note">'+(a.cached?'Raport z pamięci podręcznej · bez ponownego uruchamiania AI':'Nowa analiza · raport zapisany na 6 godzin')+'</p><p class="mm-report">'+safe(a.report||a.error||'Nie udało się przygotować analizy.')+'</p></section><section><h3>Dostępne dane</h3><p class="mm-small">Zdarzenia: '+(a.evidence?.match?.events?.length??'—')+' · Składy: '+(a.evidence?.match?.lineups?.length??'—')+' · Absencje: '+(a.evidence?.match?.injuries?.length??'—')+'</p></section>';
- }).catch(e=>body.textContent='Nie udało się pobrać danych: '+e.message);
+ const modal=$('match-modal');modal.hidden=false;
+ $('mm-title').textContent=m.home.name+' — '+m.away.name;$('mm-meta').textContent=m.league+' · '+new Date(m.date).toLocaleString('pl-PL');
+ document.querySelectorAll('[data-dismiss]').forEach(x=>x.onclick=()=>{modal.hidden=true;activeModalMatch=null;if(liveRefreshTimer){clearInterval(liveRefreshTimer);liveRefreshTimer=null;}});
+ $('mm-body').innerHTML='<div class="loading">Pobieram wynik, statystyki i zdarzenia…</div><section><h3>Analiza MatchMind</h3><div id="mm-ai-report" class="mm-report">Przygotowuję raport AI…</div></section>';
+ refreshMatchOverview(m).catch(e=>{$('mm-body').innerHTML='<p class="mm-empty">'+safe(e.message)+'</p>';});
+ fetch('/api/matches/'+encodeURIComponent(m.id)+'/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixture:m})}).then(r=>r.json()).then(a=>{
+  if(!$('match-modal')||$('match-modal').hidden||activeModalMatch?.id!==m.id)return;
+  const target=$('mm-ai-report');if(target){target.textContent=a.report||a.error||'Brak raportu';target.insertAdjacentHTML('beforebegin','<p class="mm-cache-note">'+(a.cached?'Raport z cache':'Raport wygenerowany przez AI')+'</p>');}
+ }).catch(e=>{const target=$('mm-ai-report');if(target)target.textContent='Analiza niedostępna: '+e.message;});
 }
 function addBuilder(){
  if(document.getElementById('mm-builder'))return;

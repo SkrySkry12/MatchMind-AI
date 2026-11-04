@@ -116,3 +116,71 @@ input{color-scheme:dark}
 .mm-goals-markets b{font-size:13px;color:#fff}.mm-goals p{font-size:10px;color:#c7d6e9;margin:10px 0 5px}.mm-goals>small{font-size:9px;line-height:1.5;color:#9eafc7}
 .mm-goals-missing{font-size:10px;color:#ffdca1}
 @media(max-width:520px){.mm-goals-markets{grid-template-columns:repeat(2,minmax(0,1fr))}.mm-goals-lambdas b{font-size:22px}}
+
+/* MatchMind Model Intelligence — readable desktop and mobile performance center */
+.performance{margin:26px 0 38px;padding:22px;border:1px solid #2b3547;border-radius:18px;background:linear-gradient(145deg,#151d2a,#101722);box-shadow:0 18px 44px #0003;min-width:0}
+.performance-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+.performance-head h2{font-size:25px;margin:3px 0 7px;letter-spacing:-.035em}
+.performance-head .muted{max-width:650px;font-size:12px;line-height:1.6}
+.performance-refresh{flex:0 0 auto;border:1px solid #3b5272;border-radius:10px;background:#1d2c42;color:#dce9ff;padding:10px 13px;font-weight:750;font-size:11px;cursor:pointer}
+.performance-refresh:disabled{opacity:.6;cursor:wait}
+.performance-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+.performance-kpis article{min-width:0;display:grid;gap:7px;padding:14px;border:1px solid #2e3b50;border-radius:12px;background:#121b29}
+.performance-kpis article span{font-size:9px;letter-spacing:.1em;font-weight:850;color:#9eacc1}
+.performance-kpis article strong{font-size:25px;letter-spacing:-.04em;color:#f2f6ff;overflow-wrap:anywhere}
+.performance-kpis article small{font-size:10px;line-height:1.45;color:#9eacc1}
+.performance-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,.85fr);gap:12px;margin:12px 0}
+.performance-card{min-width:0;padding:16px;border:1px solid #2d394c;border-radius:13px;background:#121a26}
+.performance-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.performance-card h3{font-size:14px;margin:0 0 5px;color:#eef3fc}
+.performance-card-head p{font-size:10px;line-height:1.5;color:#9eacc1;margin:0}
+.storage-label{white-space:nowrap;padding:6px 8px;border:1px solid #344966;border-radius:8px;background:#1b2b42;color:#b8d2ff;font-size:9px;font-weight:750}
+.calibration{display:grid;gap:9px}
+.calibration-legend,.calibration-row{display:grid;grid-template-columns:minmax(100px,.8fr) minmax(100px,1fr) 45px;gap:10px;align-items:center;font-size:10px;color:#c8d4e5}
+.calibration-legend{padding-bottom:7px;border-bottom:1px solid #293447;color:#8292aa;font-size:9px}
+.calibration-range{display:grid;gap:3px;font-weight:750}
+.calibration-range small{font-size:9px;font-weight:450;color:#8392a8}
+.calibration-row>strong{text-align:right;color:#e8effa}
+.calibration-bars{display:grid;gap:5px}
+.calibration-track{height:7px;background:#263449;border-radius:20px;overflow:hidden}
+.calibration-track i{display:block;height:100%;border-radius:20px;background:#6d9fff}
+.calibration-track.actual i{background:#64d5a7}
+.calibration-key{display:flex;flex-wrap:wrap;gap:14px;padding-top:6px;color:#91a0b5;font-size:9px}
+.calibration-key span{display:flex;align-items:center;gap:6px}
+.calibration-key i{width:8px;height:8px;border-radius:50%;background:#6d9fff}
+.calibration-key span+span i{background:#64d5a7}
+.performance-empty{padding:18px 12px;border:1px dashed #34445d;border-radius:10px;color:#9eacc1;font-size:11px;line-height:1.6;text-align:center}
+.quality-list{display:grid;gap:0}
+.quality-item{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:11px 0;border-bottom:1px solid #283345}
+.quality-item:last-child{border-bottom:0}
+.quality-item span{font-size:11px;color:#c6d1e1}
+.quality-item strong{font-size:16px;color:#f1f5fc}
+.quality-item small{grid-column:1/-1;font-size:9px;color:#8292a8}
+.performance-history{margin-top:12px}
+.history-table-wrap{width:100%;overflow-x:auto}
+.history-table{width:100%;border-collapse:collapse;min-width:570px}
+.history-table th{text-align:left;padding:9px 8px;color:#8f9eb3;font-size:9px;letter-spacing:.06em;border-bottom:1px solid #344156}
+.history-table td{padding:10px 8px;border-bottom:1px solid #263245;color:#d9e2ef;font-size:10px;white-space:nowrap}
+.history-table tr:last-child td{border-bottom:0}
+.history-table td:first-child{white-space:normal;min-width:175px}
+.history-table td small{display:block;margin-top:4px;color:#8190a5;font-size:9px}
+.history-status{display:inline-block;padding:5px 7px;border-radius:7px;font-size:9px;font-weight:800}
+.history-status.done{background:#173b32;color:#a9f0d0}
+.history-status.waiting{background:#29364a;color:#b9cbe5}
+.performance-footnote{margin:12px 2px 0;color:#8190a5;font-size:9px;line-height:1.6}
+@media(max-width:760px){
+ .performance{padding:15px;margin:20px 0 28px;border-radius:14px}
+ .performance-head{display:grid;gap:10px}
+ .performance-head h2{font-size:22px}
+ .performance-refresh{justify-self:start}
+ .performance-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .performance-kpis article{padding:11px}
+ .performance-kpis article strong{font-size:22px}
+ .performance-grid{grid-template-columns:1fr}
+ .performance-card{padding:13px}
+}
+@media(max-width:390px){
+ .performance-kpis article strong{font-size:19px}
+ .calibration-legend,.calibration-row{grid-template-columns:75px minmax(70px,1fr) 38px;gap:6px}
+ .storage-label{white-space:normal}
+}

@@ -4,7 +4,7 @@ const systemPrompt='Jesteś analitykiem danych piłkarskich MatchMind AI. Otrzym
 async function askLocalLLM(evidence){
  if(process.env.LLM_ENABLED!=='true')throw new Error('Lokalny LLM jest wyłączony w konfiguracji.');
  const base=(process.env.OLLAMA_BASE_URL||'http://ollama:11434').replace(/\/$/,'');
- const model=process.env.OLLAMA_MODEL||'qwen3:1.7b';
+ const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
  const response=await fetch(base+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,stream:false,messages:[{role:'system',content:systemPrompt},{role:'user',content:'/no_think\nPrzygotuj krótki raport analityczny na podstawie danych. Nie przekraczaj 350 słów:\n'+JSON.stringify(evidence)}],options:{temperature:0.2,num_ctx:2048,num_predict:450,num_thread:4},keep_alive:'5m'}),signal:AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS||120000))});
  if(!response.ok)throw new Error('Ollama HTTP '+response.status);
  const data=await response.json();return data.message?.content||'Lokalny model nie zwrócił raportu.';
@@ -22,6 +22,6 @@ function deterministicSummary(evidence){
 export async function analyzeMatch(matchId,extra={}){
  const [match,manual]=await Promise.all([getMatchBundle(matchId),getManualStats(matchId)]);
  const evidence={match,manual,additionalContext:extra};
- try{return {mode:'local-llm',provider:'Ollama',model:process.env.OLLAMA_MODEL||'qwen3:1.7b',evidence,report:await askLocalLLM(evidence)};}
+ try{return {mode:'local-llm',provider:'Ollama',model:process.env.OLLAMA_MODEL||'qwen3:0.6b',evidence,report:await askLocalLLM(evidence)};}
  catch(error){return {mode:'statistics-only',provider:null,evidence,report:deterministicSummary(evidence),llmNotice:'Lokalny model jest niedostępny: '+error.message};}
 }

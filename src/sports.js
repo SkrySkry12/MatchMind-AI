@@ -174,7 +174,7 @@ async function teamRoster(league,teamId,forceRefresh=false){
  return players;
 }
 async function espnBundle(id,forceRefresh=false){
- const match=/^espn:([a-z0-9._-]+):(\\d+)$/.exec(id);
+ const match=/^espn:([a-z0-9._-]+):(\d+)$/.exec(id);
  if(!match||!LEAGUE_MAP.has(match[1]))throw new Error('Nieprawidłowy identyfikator meczu ESPN.');
  const [,league,event]=match;
  const d=await json(ESPN,'/apis/site/v2/sports/soccer/'+league+'/summary?event='+event,TTL.details,forceRefresh);

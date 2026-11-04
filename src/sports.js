@@ -2,7 +2,7 @@ const BASE=(process.env.FOOTBALL_API_BASE_URL||'https://v3.football.api-sports.i
 const cache=new Map();
 const TTL={fixtures:60,statistics:300,events:300,lineups:900,players:300,injuries:14400,predictions:3600,leagues:86400,teams:43200};
 const demo=[{id:'demo-1',league:'Demo League',date:new Date().toISOString(),home:{name:'North City'},away:{name:'South United'},status:'NS',demo:true},{id:'demo-2',league:'Demo League',date:new Date(Date.now()+86400000).toISOString(),home:{name:'Royal FC'},away:{name:'Athletic Town'},status:'NS',demo:true}];
-const stats={requests:0,cacheHits:0,remaining:null,limit:null};
+const stats={requests:0,cacheHits:0,staleFallbacks:0,remaining:null,limit:null};
 function cacheKey(path){return path;}
 async function api(path,{ttl=300,allowDemo=false}={}){
  const key=process.env.FOOTBALL_API_KEY;

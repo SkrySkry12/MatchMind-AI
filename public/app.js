@@ -14,9 +14,14 @@ function renderMatchOverview(data,m){
  const score=goals.home!=null&&goals.away!=null?'<div class="mm-score"><span>'+safe(m.home.name)+'</span><strong>'+goals.home+' : '+goals.away+'</strong><span>'+safe(m.away.name)+'</span></div>':'';
  const status=fixture?.fixture?.status?.long||fixture?.fixture?.status?.short||'Status nieznany';
  const eventsHtml=goalsHtml||'<p class="mm-empty">Brak zdarzeń bramkowych w danych dostawcy.</p>';
+ const pre=data.match?.preMatch,pred=data.match?.prediction;
+ const formLine=(label,ctx)=>label+': '+(ctx?.form?.length?ctx.form.map(x=>x.result+' '+x.gf+':'+x.ga).join(' · '):'brak danych');
+ const absences=(label,ctx)=>ctx?.injuries?.length?'<p><b>'+label+':</b> '+ctx.injuries.map(x=>safe(x.name)+' ('+safe(x.status)+')').join(', ')+'</p>':'';
+ const preHtml=pre?'<section><h3>Forma i absencje</h3><p>'+safe(formLine('Gospodarze',pre.home))+'</p><p>'+safe(formLine('Goście',pre.away))+'</p>'+absences('Gospodarze',pre.home)+absences('Goście',pre.away)+(pre.notices?.length?'<p class="mm-empty">'+safe(pre.notices.join(' '))+'</p>':'')+'</section>':'';
+ const predHtml=pred?'<section><h3>Szacowane szanse przedmeczowe</h3><div class="mm-stats"><div class="mm-stat"><span>1 · Gospodarze</span><strong>'+pred.home+'%</strong></div><div class="mm-stat"><span>X · Remis</span><strong>'+pred.draw+'%</strong></div><div class="mm-stat"><span>2 · Goście</span><strong>'+pred.away+'%</strong></div></div><p class="mm-empty">Pewność: '+safe(pred.confidence)+' · próbka: '+pred.sampleHome+' / '+pred.sampleAway+' ostatnich meczów. To estymacja statystyczna, nie kurs ani gwarancja.</p></section>':'';
  const body=$('mm-body');
  const report=body.querySelector('#mm-ai-report')?.outerHTML||'<div id="mm-ai-report" class="mm-report">Analiza AI ładuje się niezależnie od statystyk…</div>';
- body.innerHTML='<section><div class="mm-live-row"><h3>Wynik i przebieg</h3><span class="'+(data.live?'mm-live':'')+'">'+safe(status)+(data.live?' · NA ŻYWO':'')+'</span></div>'+score+'</section><section><h3>Statystyki meczu</h3>'+statHtml+'</section><section><h3>Bramki</h3>'+eventsHtml+'</section><section><h3>Analiza MatchMind</h3>'+report+'</section>';
+ body.innerHTML='<section><div class="mm-live-row"><h3>Wynik i przebieg</h3><span class="'+(data.live?'mm-live':'')+'">'+safe(status)+(data.live?' · NA ŻYWO':'')+'</span></div>'+score+'</section><section><h3>Statystyki meczu</h3>'+statHtml+'</section><section><h3>Bramki</h3>'+eventsHtml+'</section>'+predHtml+preHtml+'<section><h3>Analiza MatchMind</h3>'+report+'</section>';
 }
 async function refreshMatchOverview(m){
  const r=await fetch('/api/matches/'+encodeURIComponent(m.id)+'/overview');const d=await r.json();if(!r.ok)throw new Error(d.error||'Nie udało się pobrać danych meczu');

@@ -121,12 +121,92 @@ async function espnFixtures(day){
  stats.failedLeagues=failed;
  return {fixtures:[...byId.values()].sort((a,b)=>a.date.localeCompare(b.date)),success:LEAGUES.length-failed.length,failed};
 }
+
+const BSD='https://sports.bzzoiro.com';
+const BSD_LEAGUE_ID=25;
+function bsdTeam(raw){
+ const t=raw?.team||raw||{};
+ return {id:val(t.id,t.team_id,null),name:str(t.name||t.display_name||t.displayName||t.short_name,'Nieznana drużyna'),logo:str(t.logo||t.logo_url||t.badge),slug:str(t.short_name||t.abbreviation||'')};
+}
+function bsdStatus(raw){
+ const s=str(raw?.status?.name||raw?.status?.short||raw?.status||raw?.state||'upcoming').toLowerCase();
+ if(/live|in.?play/.test(s))return 'LIVE';
+ if(/finish|complete|ended/.test(s))return 'FT';
+ if(/postpon/.test(s))return 'POSTPONED';
+ if(/cancel|abandon/.test(s))return 'CANCELLED';
+ return 'NS';
+}
+function bsdEventToMatch(e){
+ const home=bsdTeam(e.home_team||e.home||e.homeTeam||e.teams?.home||e.competitors?.find(x=>x.home_away==='home'||x.homeAway==='home'));
+ const away=bsdTeam(e.away_team||e.away||e.awayTeam||e.teams?.away||e.competitors?.find(x=>x.home_away==='away'||x.homeAway==='away'));
+ const when=val(e.kickoff_at,e.start_time,e.date,e.match_date,e.datetime,e.utc_date);
+ const id=val(e.id,e.event_id);
+ if(!id||!when||!home.name||!away.name||Number.isNaN(Date.parse(when)))return null;
+ const score=e.score||{},hs=val(score.home,e.home_score,e.home_goals),as=val(score.away,e.away_score,e.away_goals);
+ const status=bsdStatus(e);
+ return {id:'bsd:'+String(id),slug:'bsd:'+String(id),date:new Date(when).toISOString(),league:'Ekstraklasa',leagueId:'pol.1',country:'Polska',round:str(e.round_label||e.round_name||e.round||e.matchday||''),status,statusText:str(e.status_display||e.status?.label||e.status||''),home,away,venue:str(e.venue?.name||e.venue_name||e.stadium||''),elapsed:val(e.current_minute,e.minute,null),score:{home:hs==null?null:Number(hs),away:as==null?null:Number(as)},prediction:null,source:'BSD',providerEventId:String(id)};
+}
+async function bsdJson(path,ttl=TTL.fixtures,forceRefresh=false){
+ const token=process.env.BSD_API_TOKEN;
+ if(!token)throw new Error('Brak BSD_API_TOKEN w konfiguracji serwera.');
+ const key='mm:bsd:v1:'+path,hit=await readCache(key);
+ if(!forceRefresh&&hit&&hit.expires>Date.now()){stats.cacheHits++;return hit.data;}
+ try{
+  const response=await fetch(BSD+path,{headers:{accept:'application/json',authorization:'Token '+token},signal:AbortSignal.timeout(12000)});
+  stats.requests++;
+  if(!response.ok)throw new Error(response.status===401?'BSD odrzucił token (401). Sprawdź BSD_API_TOKEN w Coolify.':'BSD API HTTP '+response.status);
+  const data=await response.json();await writeCache(key,data,ttl);return data;
+ }catch(error){if(!forceRefresh&&hit){stats.staleFallbacks++;return hit.data;}throw error;}
+}
+async function bsdFixtures(day){
+ if(!process.env.BSD_API_TOKEN)return {fixtures:[],notice:null};
+ const query=new URLSearchParams({league_id:String(BSD_LEAGUE_ID),date_from:day,date_to:day,limit:'200'});
+ try{
+  const data=await bsdJson('/api/v2/events/?'+query.toString(),TTL.fixtures);
+  const rows=array(data.results||data.events||data.items||data.data);
+  return {fixtures:rows.map(bsdEventToMatch).filter(Boolean),notice:null};
+ }catch(error){return {fixtures:[],notice:'BSD: '+error.message};}
+}
+function bsdPlayers(raw){
+ const groups=[];
+ const sources=Array.isArray(raw?.lineups)?raw.lineups:[raw?.home,raw?.away].filter(Boolean);
+ for(const [index,g] of sources.entries()){
+  const teamName=str(g.team?.name||g.team_name||g.name|| (index===0?'Gospodarze':'Goście'));
+  const xi=array(g.starting_xi||g.startingXI||g.starting||g.players||g.lineup);
+  const bench=array(g.substitutes||g.bench||g.subs);
+  const mapPlayer=(p,starter)=>({name:str(p.player?.name||p.name||p.full_name||p.player_name,''),number:val(p.shirt_number,p.jersey_number,p.number,p.shirt,null),position:str(p.position?.name||p.position_name||p.position||''),starter});
+  const players=[...xi.map(p=>mapPlayer(p,true)),...bench.map(p=>mapPlayer(p,false))].filter(p=>p.name);
+  if(players.length)groups.push({team:teamName,formation:str(g.formation||g.formation_name||''),players,kind:raw.lineup_status==='predicted'||g.lineup_status==='predicted'?'predicted':'lineup'});
+ }
+ return groups;
+}
+async function bsdBundle(id,forceRefresh=false){
+ const match=/^bsd:(\d+)$/.exec(id);
+ if(!match)throw new Error('Nieprawidłowy identyfikator meczu BSD.');
+ const eventId=match[1];
+ const [detail,lineupData]=await Promise.all([
+  bsdJson('/api/v2/events/'+eventId+'/',TTL.details,forceRefresh),
+  bsdJson('/api/v2/events/'+eventId+'/lineups/',TTL.squad,forceRefresh).catch(()=>null)
+ ]);
+ const fixture=bsdEventToMatch({...detail,id:eventId});
+ if(!fixture)throw new Error('BSD nie zwrócił danych drużyn lub daty spotkania.');
+ const lineups=bsdPlayers(lineupData||detail.lineups||{});
+ const unavailable=detail.unavailable_players||lineupData?.unavailable_players||[];
+ const injuries=array(unavailable).flatMap(group=>{
+  const teamName=str(group.team?.name||group.team_name||group.team||'');
+  return array(group.players||group.athletes||group.unavailable_players).map(p=>({name:str(p.name||p.player?.name||p.full_name,'Zawodnik'),team:teamName,status:str(p.status||p.reason||p.type,'Niedostępny')}));
+ });
+ const status=fixture.status;
+ return {source:'BSD',fixture:[{fixture:{status:{short:status,long:fixture.statusText}},goals:fixture.score,teams:{home:fixture.home,away:fixture.away}}],match:fixture,statistics:[],events:[],lineups,squadKind:lineups.some(g=>g.kind==='lineup')?'lineup':lineups.length?'predicted':null,players:[],injuries,predictions:null,live:status==='LIVE',refreshAfterSeconds:status==='LIVE'?30:null,attribution:{label:'BSD · Bzzoiro Sports Data',url:'https://sports.bzzoiro.com/leagues/25/'}};
+}
+
 export async function getFixtures(date){
- const day=dayUTC(date),primary=await espnFixtures(day);
+ const day=dayUTC(date),[primary,bsd]=await Promise.all([espnFixtures(day),bsdFixtures(day)]);
  if(primary.success===0)throw new Error('ESPN nie zwrócił terminarza dla wybranej daty. Spróbuj ponownie później.');
- const notice=primary.failed.length?'Nie udało się pobrać części rozgrywek: '+primary.failed.join(', ')+'.':null;
- const enriched=await Promise.all(primary.fixtures.map(f=>enrichFixture(f).catch(()=>({...f,prediction:null,preMatch:null}))));
- return {source:'ESPN',fixtures:enriched,updated:new Date().toISOString(),notice,failedLeagues:primary.failed,
+ const notice=[primary.failed.length?'Nie udało się pobrać części rozgrywek: '+primary.failed.join(', ')+'.':null,bsd.notice].filter(Boolean).join(' ')||null;
+ const combined=[...primary.fixtures.filter(f=>f.leagueId!=='pol.1'),...bsd.fixtures];
+ const enriched=await Promise.all(combined.map(f=>enrichFixture(f).catch(()=>({...f,prediction:null,preMatch:null}))));
+ return {source:'ESPN + BSD',fixtures:enriched,updated:new Date().toISOString(),notice,failedLeagues:primary.failed,
   attribution:{label:'ESPN',url:'https://www.espn.com/soccer/'}};
 }
 function detailTeams(data,fixture){
@@ -205,6 +285,7 @@ async function espnBundle(id,forceRefresh=false){
 export async function getMatchBundle(id,options={}){
  const key=str(id).trim(),forceRefresh=options.forceRefresh===true;
  if(key.startsWith('espn:'))return espnBundle(key,forceRefresh);
+ if(key.startsWith('bsd:'))return bsdBundle(key,forceRefresh);
  throw new Error('Nieznany identyfikator meczu. Odśwież terminarz.');
 }
 export async function getFixtureStats(id){

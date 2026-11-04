@@ -26,10 +26,17 @@ export async function analyzeMatch(matchId,extra={}){
  const cacheKey='analysis:v2:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(cached&&cached.expires>Date.now())return {...cached.data,cached:true};
- const [match,manual]=await Promise.all([getMatchBundle(matchId),getManualStats(matchId)]);
+ let match,providerNotice=null;
+ try{match=await getMatchBundle(matchId);}catch(error){
+  if(!extra.fixture)throw error;
+  providerNotice='SportScore nie udostępnił szczegółów tego meczu ('+error.message+'). Raport wykorzystuje wyłącznie dane terminarza.';
+  const f=extra.fixture;
+  match={source:'SportScore',match:f,fixture:[],statistics:[],events:[],lineups:[],players:[],injuries:[],predictions:null,live:f.status==='LIVE'};
+ }
+ const manual=await getManualStats(matchId);
  const evidence={match,manual,additionalContext:extra};
  try{
-  const result={mode:'local-llm',provider:'Ollama',model,evidence,report:await askLocalLLM(evidence),cached:false};
+  const result={mode:'local-llm',provider:'Ollama',model,evidence,report:await askLocalLLM(evidence),llmNotice:providerNotice,cached:false};
   await writeCache(cacheKey,result,ANALYSIS_CACHE_TTL);return result;
- }catch(error){return {mode:'statistics-only',provider:null,evidence,report:deterministicSummary(evidence),llmNotice:'Lokalny model jest niedostępny: '+error.message,cached:false};}
+ }catch(error){return {mode:'statistics-only',provider:null,evidence,report:deterministicSummary(evidence),llmNotice:[providerNotice,'Lokalny model jest niedostępny: '+error.message].filter(Boolean).join(' '),cached:false};}
 }

@@ -61,8 +61,15 @@ export function getApiUsage(){return {...stats,...cacheInfo(),configured:true,pr
 
 export async function getFixtures(date){
  const day=date||new Date().toISOString().slice(0,10);
- const data=await request('/api/v1/fixtures/?sport=football&date='+encodeURIComponent(day)+'&limit=200',{ttl:TTL.fixtures});
- const fixtures=unwrapList(data).map(mapMatch).filter(m=>m.id&&m.home.name!=='Nieznana drużyna'&&m.away.name!=='Nieznana drużyna');
+ const basePath='/api/v1/fixtures/?sport=football&date='+encodeURIComponent(day)+'&limit=200';
+ const [data,championsData]=await Promise.all([
+  request(basePath,{ttl:TTL.fixtures}),
+  request('/api/v1/fixtures/?sport=football&date='+encodeURIComponent(day)+'&competition=uefa-champions-league&limit=200',{ttl:TTL.fixtures}).catch(()=>null)
+ ]);
+ const raw=[...unwrapList(data),...unwrapList(championsData)];
+ const bySlug=new Map();
+ for(const item of raw){const mapped=mapMatch(item);if(mapped.id&&mapped.home.name!=='Nieznana drużyna'&&mapped.away.name!=='Nieznana drużyna')bySlug.set(mapped.id,mapped);}
+ const fixtures=[...bySlug.values()];
  fixtures.sort((a,b)=>new Date(a.date)-new Date(b.date));
  return {source:SOURCE,fixtures,updated:first(data.updated,null),attribution:{label:'Powered by SportScore',url:'https://sportscore.com/'}};
 }
@@ -75,7 +82,7 @@ export async function getFixtureStats(id){
 export async function getMatchBundle(id){
  const slug=String(id||'').trim();
  if(!slug||slug.length>200)throw new Error('Dostawca nie przekazał prawidłowego slug meczu. Odśwież terminarz i spróbuj ponownie.');
- const data=await request('/api/widget/match/?sport=football&slug='+encodeURIComponent(slug),{ttl:TTL.match});
+ let data;try{data=await request('/api/widget/match/?sport=football&slug='+encodeURIComponent(slug),{ttl:TTL.match});}catch(error){if(!String(error.message).includes('HTTP 404'))throw error;data=await request('/api/v1/match/?sport=football&slug='+encodeURIComponent(slug),{ttl:TTL.match});}
  const raw=data.match||data.fixture||data.data?.match||data.data?.fixture||data.data||data.result?.match||data.result||data;
  const mapped=mapMatch(raw);
  const timeline=first(raw.timeline,raw.events,raw.incidents,data.timeline,data.events,[]);

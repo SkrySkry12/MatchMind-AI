@@ -84,6 +84,22 @@ async function askLocalLLM(compact){
  if(!answer)throw new Error('Lokalny model nie zwrócił raportu.');
  return answer;
 }
+
+function poissonProbability(lambda,k){let value=Math.exp(-lambda);for(let i=1;i<=k;i++)value*=lambda/i;return value;}
+function expectedGoalsModel(home,away){
+ if(!home||!away||home.matches<3||away.matches<3)return {available:false,reason:'Za mało danych: potrzeba co najmniej 3 ostatnich meczów każdej drużyny.'};
+ const blend=(s)=>{const recent=s.last5?.goalsForPerMatch??s.goalsForPerMatch;const long=s.last10?.goalsForPerMatch??s.goalsForPerMatch;return recent*.6+long*.4;};
+ const concede=(s)=>{const recent=s.last5?.goalsAgainstPerMatch??s.goalsAgainstPerMatch;const long=s.last10?.goalsAgainstPerMatch??s.goalsAgainstPerMatch;return recent*.6+long*.4;};
+ const shrink=(value,n)=>1.25+(value-1.25)*(n/(n+5));
+ const hAttack=shrink(blend(home),home.matches),aDefence=shrink(concede(away),away.matches);
+ const aAttack=shrink(blend(away),away.matches),hDefence=shrink(concede(home),home.matches);
+ const lambdaHome=Math.max(.15,Math.min(4.5,(hAttack+aDefence)/2*1.08));
+ const lambdaAway=Math.max(.15,Math.min(4.5,(aAttack+hDefence)/2*.92));
+ const maxGoals=9,ph=Array.from({length:maxGoals+1},(_,k)=>poissonProbability(lambdaHome,k)),pa=Array.from({length:maxGoals+1},(_,k)=>poissonProbability(lambdaAway,k));
+ let homeWin=0,draw=0,awayWin=0,over15=0,over25=0,over35=0,btts=0,best={score:'',probability:0};
+ for(let h=0;h<=maxGoals;h++)for(let a=0;a<=maxGoals;a++){const prob=ph[h]*pa[a];if(h>a)homeWin+=prob;else if(h===a)draw+=prob;else awayWin+=prob;if(h+a>=2)over15+=prob;if(h+a>=3)over25+=prob;if(h+a>=4)over35+=prob;if(h>0&&a>0)btts+=prob;if(prob>best.probability)best={score:h+':'+a,probability:prob};}
+ return {available:true,lambdaHome:Number(lambdaHome.toFixed(2)),lambdaAway:Number(lambdaAway.toFixed(2)),lambdaTotal:Number((lambdaHome+lambdaAway).toFixed(2)),homeWin:Number((homeWin*100).toFixed(1)),draw:Number((draw*100).toFixed(1)),awayWin:Number((awayWin*100).toFixed(1)),over15:Number((over15*100).toFixed(1)),over25:Number((over25*100).toFixed(1)),over35:Number((over35*100).toFixed(1)),btts:Number((btts*100).toFixed(1)),mostLikelyScore:best.score,scoreProbability:Number((best.probability*100).toFixed(1)),sampleHome:home.matches,sampleAway:away.matches,method:'Poisson · forma bramkowa 5/10 · korekta do średniej 1.25 gola · przewaga gospodarzy'};
+}
 function buildQuickReadout(compact){
  const p=compact.match.prediction||null,home=compact.teams.home.summary,away=compact.teams.away.summary;
  const labels=['1 · '+(compact.match.home||'Gospodarze'),'X · Remis','2 · '+(compact.match.away||'Goście')];
@@ -108,11 +124,11 @@ function buildQuickReadout(compact){
   else if(away.goalsForPerMatch>home.goalsForPerMatch)rationale.push('Goście strzelali średnio więcej goli ('+away.goalsForPerMatch+' vs '+home.goalsForPerMatch+').');
  }
  const stats=side=>side?{matches:side.matches,record:side.record,pointsPerMatch:side.pointsPerMatch,goals:side.goalsFor+':'+side.goalsAgainst,goalsForPerMatch:side.goalsForPerMatch,goalsAgainstPerMatch:side.goalsAgainstPerMatch,cleanSheets:side.cleanSheets,failedToScore:side.failedToScore,btts:side.btts,over25:side.over25,trend:side.trend,trendDelta:side.trendDelta,last5:side.last5,last10:side.last10,previous5:side.previous5,streak:side.streak,home:side.home,away:side.away}:null;
- return {pick,probabilities:p?{home:p.home,draw:p.draw,away:p.away}:null,confidence:p?.confidence||'brak modelu',sampleHome:p?.sampleHome||home?.matches||0,sampleAway:p?.sampleAway||away?.matches||0,home:stats(home),away:stats(away),rationale,warning:!home||!away||home.matches<3||away.matches<3?'Próbka danych jest ograniczona. Nie traktuj tego jako pewnego typu.':'Wskazanie statystyczne, nie gwarancja wyniku.'};
+ const goals=expectedGoalsModel(home,away);\n return {pick,probabilities:p?{home:p.home,draw:p.draw,away:p.away}:null,goals,confidence:p?.confidence||'brak modelu',sampleHome:p?.sampleHome||home?.matches||0,sampleAway:p?.sampleAway||away?.matches||0,home:stats(home),away:stats(away),rationale,warning:!home||!away||home.matches<3||away.matches<3?'Próbka danych jest ograniczona. Nie traktuj tego jako pewnego typu.':'Wskazanie statystyczne, nie gwarancja wyniku.'};
 }
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b',forceRefresh=extra.forceRefresh===true;
- const cacheKey='analysis:v9:'+String(matchId)+':'+model;
+ const cacheKey='analysis:v10:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(!forceRefresh&&cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  let match,providerNotice=null;

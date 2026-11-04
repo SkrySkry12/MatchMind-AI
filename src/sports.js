@@ -144,6 +144,22 @@ async function sportFixtures(day){
  const d=await json(SPORT,'/api/v1/fixtures/?sport=football&date='+day+'&limit=200',TTL.fixtures);
  return sportList(d).map(sportMatch).filter(Boolean);
 }
+function normalizeTeamName(value){
+ return str(value).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+function attachSportScoreMatches(fixtures,sportMatches){
+ const indexed=new Map();
+ for(const candidate of sportMatches){
+  const key=normalizeTeamName(candidate.home.name)+'|'+normalizeTeamName(candidate.away.name);
+  if(!indexed.has(key))indexed.set(key,[]);
+  indexed.get(key).push(candidate);
+ }
+ return fixtures.map(f=>{
+  const key=normalizeTeamName(f.home.name)+'|'+normalizeTeamName(f.away.name);
+  const candidates=(indexed.get(key)||[]).filter(x=>Math.abs(Date.parse(x.date)-Date.parse(f.date))<=18*60*60*1000);
+  return candidates.length===1?{...f,sportScoreSlug:candidates[0].slug}:f;
+ });
+}
 export async function getFixtures(date){
  const day=dayUTC(date);
  const primary=await espnFixtures(day);
@@ -152,6 +168,9 @@ export async function getFixtures(date){
  if(primary.success===0){
   try{fixtures=await sportFixtures(day);source='SportScore';notice='ESPN niedostępne. Wyświetlono terminarz zapasowy SportScore; zakres danych może być ograniczony.';}
   catch(e){throw new Error('Nie udało się pobrać terminarza z ESPN ani SportScore: '+e.message);}
+ }else{
+  try{fixtures=attachSportScoreMatches(fixtures,await sportFixtures(day));}
+  catch(e){console.warn('SportScore fixture matching unavailable:',e.message);}
  }
  const enriched=await Promise.all(fixtures.map(f=>enrichFixture(f).catch(()=>({...f,prediction:null,preMatch:null}))));
  return {source,fixtures:enriched,updated:new Date().toISOString(),notice,failedLeagues:primary.failed,

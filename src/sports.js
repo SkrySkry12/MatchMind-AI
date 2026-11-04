@@ -142,7 +142,8 @@ export async function getFixtures(date){
   try{fixtures=await sportFixtures(day);source='SportScore';notice='ESPN niedostępne. Wyświetlono terminarz zapasowy SportScore; zakres danych może być ograniczony.';}
   catch(e){throw new Error('Nie udało się pobrać terminarza z ESPN ani SportScore: '+e.message);}
  }
- const enriched=await Promise.all(fixtures.map(f=>enrichFixture(f).catch(()=>({...f,prediction:null,preMatch:null}))));\n return {source,fixtures:enriched,updated:new Date().toISOString(),notice,failedLeagues:primary.failed,
+ const enriched=await Promise.all(fixtures.map(f=>enrichFixture(f).catch(()=>({...f,prediction:null,preMatch:null}))));
+ return {source,fixtures:enriched,updated:new Date().toISOString(),notice,failedLeagues:primary.failed,
   attribution:{label:source==='ESPN'?'ESPN':'Powered by SportScore',url:source==='ESPN'?'https://www.espn.com/soccer/':'https://sportscore.com/'}};
 }
 function detailTeams(data,fixture){

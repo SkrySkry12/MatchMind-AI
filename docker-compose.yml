@@ -11,7 +11,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-matchmind}:${POSTGRES_PASSWORD:-matchmind}@db:5432/${POSTGRES_DB:-matchmind}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:0.6b}
-      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-45000}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-30000}
       LLM_ENABLED: ${LLM_ENABLED:-true}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}

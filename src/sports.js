@@ -205,9 +205,9 @@ async function espnBundle(id,forceRefresh=false){
  if(!mapped)throw new Error('ESPN nie zwrócił zespołów lub daty spotkania.');
  const statistics=statsFromBox(d),events=eventsFromSummary(d);
  const lineups=array(d.rosters).map(r=>({team:r.team,players:array(r.roster)}));
- const [homeContext,awayContext]=await Promise.all([teamContext(league,mapped.home.id,true,forceRefresh),teamContext(league,mapped.away.id,true,forceRefresh)]);
+ const [homeContext,awayContext]=await Promise.all([teamContext(league,mapped.home.id,false,forceRefresh),teamContext(league,mapped.away.id,false,forceRefresh)]);
  const prediction=estimateProbabilities(homeContext.form,awayContext.form);
- const injuryRecords=[...homeContext.injuries.map(x=>({...x,team:mapped.home.name})),...awayContext.injuries.map(x=>({...x,team:mapped.away.name}))];
+ const injuryRecords=[];
  return {source:'ESPN',fixture:[{fixture:{status:{short:mapped.status,long:mapped.statusText}},goals:mapped.score,teams:{home:mapped.home,away:mapped.away}}],
   match:{...mapped,prediction,preMatch:{home:homeContext,away:awayContext,notices:[homeContext.notice,awayContext.notice].filter(Boolean)}},statistics,events,lineups,players:[],injuries:injuryRecords,predictions:prediction,live:mapped.status==='LIVE',
   refreshAfterSeconds:mapped.status==='LIVE'?30:null,attribution:{label:'ESPN',url:'https://www.espn.com/soccer/'}};

@@ -25,7 +25,7 @@ function deterministicSummary(evidence){
  const pre=m.match?.preMatch;
  for(const [side,label] of [['home','Gospodarze'],['away','Goście']]){
   const ctx=pre?.[side],f=ctx?.form||[],summary=summarizeForm(f);
-  if(summary)parts.push(label+': forma z '+summary.matches+' ostatnich meczów: '+summary.wins+' zwycięstwa, '+summary.draws+' remisy, '+summary.losses+' porażki; bramki '+summary.goalsFor+':'+summary.goalsAgainst; 
+  if(summary)parts.push(label+': forma z '+summary.matches+' ostatnich meczów: '+summary.wins+' zwycięstwa, '+summary.draws+' remisy, '+summary.losses+' porażki; bramki '+summary.goalsFor+':'+summary.goalsAgainst+'.'); 
   if(f.length)parts.push(label+' — wyniki: '+f.map(x=>x.result+' '+x.gf+':'+x.ga+' vs '+x.opponent).join(', ')+'.');
   if(ctx?.injuries?.length)parts.push(label+' — absencje: '+ctx.injuries.map(x=>x.name+' ('+x.status+')').join(', ')+'.');
  }

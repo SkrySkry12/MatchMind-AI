@@ -169,14 +169,15 @@ async function bsdFixtures(day){
 }
 function bsdPlayers(raw){
  const groups=[];
- const sources=Array.isArray(raw?.lineups)?raw.lineups:[raw?.home,raw?.away].filter(Boolean);
+ const container=raw?.data||raw?.lineups&&!Array.isArray(raw.lineups)?(raw.data||raw.lineups):raw;
+ const sources=Array.isArray(container?.lineups)?container.lineups:[container?.home,container?.away,container?.home_team,container?.away_team].filter(Boolean);
  for(const [index,g] of sources.entries()){
   const teamName=str(g.team?.name||g.team_name||g.name|| (index===0?'Gospodarze':'Goście'));
   const xi=array(g.starting_xi||g.startingXI||g.starting||g.players||g.lineup);
   const bench=array(g.substitutes||g.bench||g.subs);
   const mapPlayer=(p,starter)=>({name:str(p.player?.name||p.name||p.full_name||p.player_name,''),number:val(p.shirt_number,p.jersey_number,p.number,p.shirt,null),position:str(p.position?.name||p.position_name||p.position||''),starter});
   const players=[...xi.map(p=>mapPlayer(p,true)),...bench.map(p=>mapPlayer(p,false))].filter(p=>p.name);
-  if(players.length)groups.push({team:teamName,formation:str(g.formation||g.formation_name||''),players,kind:raw.lineup_status==='predicted'||g.lineup_status==='predicted'?'predicted':'lineup'});
+  if(players.length)groups.push({team:teamName,formation:str(g.formation||g.formation_name||''),players,kind:(raw.lineup_status||container.lineup_status)==='predicted'||g.lineup_status==='predicted'?'predicted':'lineup'});
  }
  return groups;
 }

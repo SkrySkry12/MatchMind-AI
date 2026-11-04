@@ -90,3 +90,18 @@ input{color-scheme:dark}
 .mm-quick-team>b{font-size:12px;color:#edf2fa}
 .mm-quick-team span b{color:#dce8ff}
 @media(max-width:520px){.mm-quick-grid{grid-template-columns:1fr}.mm-quick-pick strong{font-size:14px}}
+
+/* MatchMind: czytelniejsze porównania i ocena ryzyka */
+.mm-risk{grid-column:1/-1;display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:9px 11px;border-radius:10px;font-size:10px}
+.mm-risk strong{font-size:11px}
+.mm-risk.high{background:#49242b;border:1px solid #a94b58;color:#ffd8dc}
+.mm-risk.medium{background:#49391e;border:1px solid #a77a31;color:#ffe7b2}
+.mm-risk.low{background:#173e32;border:1px solid #328b69;color:#c8ffe5}
+.mm-compare-title{grid-column:1/-1;margin-top:12px;font-size:11px;font-weight:850;color:#d9e5fb}
+.mm-quick-team{background:linear-gradient(145deg,#1c2a3d,#172233);border-color:#3b5272}
+.mm-quick-team>b{color:#f2f7ff}
+.mm-quick-team span{color:#c4d2e7}
+.mm-quick-team span b{color:#8fc3ff}
+.mm-quick-pick{border-color:#4778bd;background:linear-gradient(135deg,#1d3555,#182b45)}
+.mm-quick-pick small{color:#a9ceff}
+@media(max-width:520px){.mm-risk{align-items:flex-start}}

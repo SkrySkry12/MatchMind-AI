@@ -66,9 +66,35 @@ async function askLocalLLM(compact){
  if(!answer)throw new Error('Lokalny model nie zwrócił raportu.');
  return answer;
 }
+function buildQuickReadout(compact){
+ const p=compact.match.prediction||null,home=compact.teams.home.summary,away=compact.teams.away.summary;
+ const labels=['1 · '+(compact.match.home||'Gospodarze'),'X · Remis','2 · '+(compact.match.away||'Goście')];
+ const values=p?[Number(p.home),Number(p.draw),Number(p.away)]:null;
+ let pick=null,rationale=[];
+ if(values&&values.every(Number.isFinite)){
+  const best=Math.max(...values),index=values.indexOf(best);
+  pick={code:['1','X','2'][index],label:labels[index],probability:best,confidence:p.confidence||'nieokreślona'};
+  rationale.push('Model statystyczny wskazuje '+labels[index]+' ('+best+'%).');
+ }else if(home&&away&&home.matches>=3&&away.matches>=3){
+  const homeScore=home.pointsPerMatch+(home.goalsForPerMatch-home.goalsAgainstPerMatch)*0.25;
+  const awayScore=away.pointsPerMatch+(away.goalsForPerMatch-away.goalsAgainstPerMatch)*0.25;
+  if(Math.abs(homeScore-awayScore)>=0.35){
+   pick={code:homeScore>awayScore?'1':'2',label:homeScore>awayScore?labels[0]:labels[2],probability:null,confidence:'orientacyjna'};
+   rationale.push('Wskazanie porównawcze wynika z punktów i bilansu bramek z ostatnich meczów; brak modelowych procentów.');
+  }
+ }
+ if(home&&away){
+  if(home.pointsPerMatch>away.pointsPerMatch)rationale.push('Gospodarze zdobywali więcej punktów na mecz ('+home.pointsPerMatch+' vs '+away.pointsPerMatch+').');
+  else if(away.pointsPerMatch>home.pointsPerMatch)rationale.push('Goście zdobywali więcej punktów na mecz ('+away.pointsPerMatch+' vs '+home.pointsPerMatch+').');
+  if(home.goalsForPerMatch>away.goalsForPerMatch)rationale.push('Gospodarze strzelali średnio więcej goli ('+home.goalsForPerMatch+' vs '+away.goalsForPerMatch+').');
+  else if(away.goalsForPerMatch>home.goalsForPerMatch)rationale.push('Goście strzelali średnio więcej goli ('+away.goalsForPerMatch+' vs '+home.goalsForPerMatch+').');
+ }
+ const stats=side=>side?{matches:side.matches,record:side.wins+'W · '+side.draws+'R · '+side.losses+'P',pointsPerMatch:side.pointsPerMatch,goals:side.goalsFor+':'+side.goalsAgainst,goalsForPerMatch:side.goalsForPerMatch,goalsAgainstPerMatch:side.goalsAgainstPerMatch,cleanSheets:side.cleanSheets,failedToScore:side.failedToScore,btts:side.btts,over25:side.over25,trend:side.trend}:null;
+ return {pick,probabilities:p?{home:p.home,draw:p.draw,away:p.away}:null,confidence:p?.confidence||'brak modelu',sampleHome:p?.sampleHome||home?.matches||0,sampleAway:p?.sampleAway||away?.matches||0,home:stats(home),away:stats(away),rationale,warning:!home||!away||home.matches<3||away.matches<3?'Próbka danych jest ograniczona. Nie traktuj tego jako pewnego typu.':'Wskazanie statystyczne, nie gwarancja wyniku.'};
+}
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b',forceRefresh=extra.forceRefresh===true;
- const cacheKey='analysis:v6:'+String(matchId)+':'+model;
+ const cacheKey='analysis:v7:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(!forceRefresh&&cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  let match,providerNotice=null;
@@ -82,7 +108,7 @@ export async function analyzeMatch(matchId,extra={}){
  let report,mode='statistics-only',llmNotice=providerNotice;
  try{report=await askLocalLLM(compact);mode='local-llm';}
  catch(error){report=deterministicSummary(evidence);llmNotice=[providerNotice,'Model AI niedostępny: '+error.message+'. Wyświetlono analizę statystyczną.'].filter(Boolean).join(' ');}
- const result={mode,provider:mode==='local-llm'?'Ollama':null,model:mode==='local-llm'?model:null,report,llmNotice,cached:false};
+ const result={mode,provider:mode==='local-llm'?'Ollama':null,model:mode==='local-llm'?model:null,report,quick:buildQuickReadout(compact),llmNotice,cached:false};
  if(mode==='local-llm')await writeCache(cacheKey,result,ANALYSIS_CACHE_TTL);
  return result;
 }

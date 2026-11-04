@@ -22,3 +22,9 @@ button:hover{background:var(--red-soft);transform:translateY(-1px)}
 .report{white-space:pre-wrap;background:var(--panel-2);border:1px solid #303030;padding:18px;border-radius:14px;color:#dedede;line-height:1.7}
 footer{padding:30px 0;color:#858585;font-size:12px;text-align:center}
 @media(max-width:600px){.pill{display:none}.match{align-items:flex-start;flex-direction:column}.section-head{align-items:flex-start}}
+
+.status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 26px}
+.status-card{background:linear-gradient(145deg,#1b1b1b,#111);border:1px solid #363636;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.status-label{font-size:10px;letter-spacing:.15em;color:#999}.status-card strong{font-size:20px;color:#f4f4f4;overflow-wrap:anywhere}.status-card small{color:#999;font-size:12px}
+.section-head .muted{margin:0 0 18px}.match{transition:border-color .18s,transform .18s}.match:hover{border-color:#71343a;transform:translateY(-1px)}.match .eyebrow{margin:0 0 7px;font-size:9px}
+@media(max-width:650px){.status-grid{grid-template-columns:1fr}.status-card{padding:15px}.hero{text-align:left;align-items:flex-start}.hero h1{margin-left:0}.section-head{flex-direction:column}}

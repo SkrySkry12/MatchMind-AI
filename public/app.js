@@ -159,6 +159,7 @@ const matchesEl=document.querySelector('#matches'),$=id=>document.getElementById
  if(performance)loadPerformance();
  if(coupons)renderCouponPicker();
 }
-document.querySelectorAll('.main-tab').forEach(button=>button.addEventListener('click',()=>switchMainTab(button.dataset.tab)));\naddBuilder();
+document.querySelectorAll('.main-tab').forEach(button=>button.addEventListener('click',()=>switchMainTab(button.dataset.tab)));
+addBuilder();
 $('performance-refresh')?.addEventListener('click',loadPerformance);
 load();refreshStatus();if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});

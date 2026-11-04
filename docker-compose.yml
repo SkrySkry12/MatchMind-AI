@@ -3,9 +3,12 @@ services:
     build: .
     ports: ["4000:4000"]
     env_file: .env
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
     depends_on:
       - db
     restart: unless-stopped
+    mem_limit: 512m
   db:
     image: postgres:16-alpine
     environment:
@@ -14,12 +17,17 @@ services:
       POSTGRES_PASSWORD: matchmind
     volumes: ["pgdata:/var/lib/postgresql/data"]
     restart: unless-stopped
+    mem_limit: 384m
   ollama:
     image: ollama/ollama:latest
     profiles: ["local-ai"]
     volumes: ["ollama:/root/.ollama"]
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KEEP_ALIVE: "5m"
     restart: unless-stopped
-    # For NVIDIA GPU support, add the appropriate deploy/device configuration for your host.
+    mem_limit: 2304m
 volumes:
   pgdata:
   ollama:

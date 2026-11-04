@@ -251,3 +251,13 @@ input{color-scheme:dark}
 #legacy-analysis-result{margin-top:15px;padding-top:13px;border-top:1px solid #2c3c52;min-width:0}
 #legacy-analysis-result>h3{font-size:15px;margin:0 0 10px;color:#eef4ff}
 @media(max-width:600px){.legacy-analysis{padding:13px}.legacy-analysis-head{align-items:flex-start;flex-direction:column}.legacy-analysis-action{width:100%;justify-content:space-between}.legacy-analysis-action button{flex:1}}
+
+/* Automatic coupon selection */
+.coupon-auto-toggle{display:flex;align-items:flex-start;gap:11px;margin:14px 0;padding:13px;border:1px solid #456b9b;border-radius:11px;background:#17283b;color:#eaf3ff;cursor:pointer}
+.coupon-auto-toggle input{width:18px;height:18px;flex:0 0 auto;margin:2px 0 0;accent-color:#72a9e8}
+.coupon-auto-toggle span{display:grid;gap:4px}
+.coupon-auto-toggle b{font-size:12px}
+.coupon-auto-toggle small{font-size:10px;line-height:1.5;color:#a9bdd5}
+.coupon-auto-summary{margin:12px 0;padding:13px;border:1px solid #38516f;border-radius:11px;background:#17283b;color:#dbeaff;font-size:11px;line-height:1.6}
+.coupon-auto-summary strong{color:#fff;font-size:13px}
+.coupon-auto-summary p{margin:5px 0 0;color:#b8cbe2}

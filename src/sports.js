@@ -12,7 +12,7 @@ const LEAGUES=[
 ];
 const LEAGUE_MAP=new Map(LEAGUES.map(x=>[x[0],x]));
 const stats={requests:0,cacheHits:0,staleFallbacks:0,failedLeagues:[]};
-const TTL={fixtures:180,details:90,team:900};
+const TTL={fixtures:180,details:90,team:900,squad:900};
 const str=(v,f='')=>v===undefined||v===null||v===''?f:String(v);
 const val=(...v)=>v.find(x=>x!==undefined&&x!==null&&x!=='');
 const array=x=>Array.isArray(x)?x:[];
@@ -232,7 +232,7 @@ function normalizeSportInjuries(raw,d){
 async function sportBundle(id,forceRefresh=false){
  const slug=id.slice('sportscore:'.length);
  if(!slug||slug.length>200)throw new Error('Nieprawidłowy identyfikator SportScore.');
- const d=await json(SPORT,'/api/widget/match/?sport=football&slug='+encodeURIComponent(slug),TTL.details,forceRefresh);
+ const d=await json(SPORT,'/api/widget/match/?sport=football&slug='+encodeURIComponent(slug),TTL.squad,forceRefresh);
  const raw=d.match||d.fixture||d.data?.match||d.data||d;
  const mapped=sportMatch({...raw,slug})||null;
  if(!mapped)throw new Error('SportScore nie zwrócił kompletnych szczegółów meczu.');

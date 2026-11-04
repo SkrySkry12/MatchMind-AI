@@ -81,7 +81,7 @@ function renderCouponPicker(){
 function updateCouponCount(){
  const count=pickedMatches.size;
  if($('coupon-picked-count'))$('coupon-picked-count').textContent=count+' wybranych';
- if($('coupon-generate'))$('coupon-generate').disabled=count===0;
+ if($('coupon-generate'))$('coupon-generate').disabled=$('coupon-auto-mode')?.checked?!allMatches.length:count===0;
  if($('legacy-picked-count'))$('legacy-picked-count').textContent=count+' wybranych';
  if($('legacy-analyze'))$('legacy-analyze').disabled=count===0;
 }
@@ -108,6 +108,8 @@ function addLegacyAnalysis(){
 }
 function addBuilder(){
  renderCouponPicker();
+ const autoMode=$('coupon-auto-mode'),manualPicker=$('coupon-manual-picker');
+ if(autoMode&&manualPicker){manualPicker.hidden=autoMode.checked;autoMode.addEventListener('change',()=>{manualPicker.hidden=autoMode.checked;updateCouponCount();});}
  document.querySelectorAll('[data-coupon-mode]').forEach(button=>button.onclick=()=>{
   const consult=button.dataset.couponMode==='consult';
   document.querySelectorAll('[data-coupon-mode]').forEach(x=>x.classList.toggle('active',x===button));

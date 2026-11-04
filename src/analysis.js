@@ -2,59 +2,87 @@ import {getMatchBundle} from './sports.js';
 import {getManualStats} from './store.js';
 import {readCache,writeCache} from './cache.js';
 const ANALYSIS_CACHE_TTL=20*60;
-const FORM_MIN_SAMPLE=3;
-const systemPrompt='Jesteś analitykiem piłkarskim MatchMind AI. Otrzymujesz dane z ESPN lub SportScore oraz historię ostatnich meczów i raporty absencji. Korzystaj wyłącznie z dostarczonych danych. Oceniaj formę na podstawie ostatnich wyników, bilans bramek, skuteczność u siebie i na wyjeździe, absencje oraz statystyki meczu. Wyraźnie odróżniaj fakty od szacunków. Prawdopodobieństwa MatchMind są orientacyjnym szacunkiem modelu, nie gwarancją. Nie wymyślaj brakujących danych. Zaznacz ograniczenia. Pisz po polsku, zwięźle i używaj nagłówków.';
-async function askLocalLLM(evidence){
- if(process.env.LLM_ENABLED!=='true')throw new Error('Lokalny LLM jest wyłączony w konfiguracji.');
- const base=(process.env.OLLAMA_BASE_URL||'http://ollama:11434').replace(/\/$/,'');
- const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
- const response=await fetch(base+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,stream:false,messages:[{role:'system',content:systemPrompt},{role:'user',content:'/no_think\nPrzygotuj krótki raport analityczny na podstawie danych. Nie przekraczaj 250 słów:\n'+JSON.stringify(evidence)}],options:{temperature:0.2,num_ctx:2048,num_predict:300,num_thread:4},keep_alive:'5m'}),signal:AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS||30000))});
- if(!response.ok)throw new Error('Ollama HTTP '+response.status);
- const data=await response.json();return data.message?.content||'Lokalny model nie zwrócił raportu.';
-}
+const systemPrompt='Jesteś analitykiem piłkarskim MatchMind AI. Analizuj wyłącznie dostarczone fakty. Uwzględniaj ostatnie 5 meczów, gole strzelone i stracone, punkty na mecz, czyste konta, mecze bez gola, BTTS, over 2.5, serię wyników, przewagę własnego boiska, statystyki sezonowe oraz potwierdzone absencje. Nie traktuj samych zwycięstw i porażek jako pełnej analizy. Nie wymyślaj danych ani składów. Oddziel fakty od szacunków, wskaż brakujące dane i czynniki ryzyka. Nie zawyżaj pewności. Pisz po polsku, czytelnie, z krótkimi nagłówkami i maksymalnie 300 słowami.';
 function summarizeForm(form){
  if(!Array.isArray(form)||!form.length)return null;
  const wins=form.filter(x=>x.result==='W').length,draws=form.filter(x=>x.result==='D').length,losses=form.filter(x=>x.result==='L').length;
- const scored=form.reduce((n,x)=>n+x.gf,0),conceded=form.reduce((n,x)=>n+x.ga,0);
- return {matches:form.length,wins,draws,losses,goalsFor:scored,goalsAgainst:conceded,points:wins*3+draws};
+ const scored=form.reduce((n,x)=>n+(Number(x.gf)||0),0),conceded=form.reduce((n,x)=>n+(Number(x.ga)||0),0);
+ const cleanSheets=form.filter(x=>Number(x.ga)===0).length,failedToScore=form.filter(x=>Number(x.gf)===0).length;
+ const btts=form.filter(x=>Number(x.gf)>0&&Number(x.ga)>0).length,over25=form.filter(x=>(Number(x.gf)+Number(x.ga))>=3).length;
+ const points=wins*3+draws;
+ const lastThree=form.slice(0,3),previous=form.slice(3);
+ const recentPoints=lastThree.reduce((n,x)=>n+(x.result==='W'?3:x.result==='D'?1:0),0);
+ const previousPoints=previous.reduce((n,x)=>n+(x.result==='W'?3:x.result==='D'?1:0),0);
+ let streak=0;for(const x of form){if(!streak)streak=x.result;else if(x.result===streak)streak+='';else break;}
+ return {matches:form.length,wins,draws,losses,goalsFor:scored,goalsAgainst:conceded,points,pointsPerMatch:Number((points/form.length).toFixed(2)),goalsForPerMatch:Number((scored/form.length).toFixed(2)),goalsAgainstPerMatch:Number((conceded/form.length).toFixed(2)),cleanSheets,failedToScore,btts,over25,recentPoints,previousPoints,trend:lastThree.length&&previous.length?(recentPoints>previousPoints?'poprawa':recentPoints<previousPoints?'pogorszenie':'stabilna'): 'za mała próbka'};
+}
+function readableSeasonStats(statistics,homeName,awayName){
+ if(!Array.isArray(statistics)||!statistics.length)return [];
+ return statistics.map(group=>{
+  const teamName=group?.team?.displayName||group?.team?.name||'Drużyna';
+  const values=Array.isArray(group?.statistics)?group.statistics:[];
+  const selected=values.filter(x=>/goal|assist|win|loss|draw|shot|clean|conced|possession|corner|card|save|game|match/i.test(String(x.type||''))).slice(0,12);
+  if(!selected.length)return null;
+  return teamName+': '+selected.map(x=>String(x.type)+': '+String(x.value??'brak')).join('; ')+'.';
+ }).filter(Boolean);
+}
+function compactEvidence(evidence){
+ const m=evidence.match,pre=m.match?.preMatch,teams={};
+ for(const [side,label] of [['home','Gospodarze'],['away','Goście']]){
+  const ctx=pre?.[side]||{},form=Array.isArray(ctx.form)?ctx.form:[],summary=summarizeForm(form);
+  teams[side]={label,team:m.match?.[side]?.name||m.match?.[side]?.name||label,form:form.map(x=>({date:x.date,opponent:x.opponent,result:x.result,goalsFor:x.gf,goalsAgainst:x.ga,venue:x.venue})),summary,injuries:(ctx.injuries||[]).map(x=>({name:x.name,status:x.status})),notice:ctx.notice||null};
+ }
+ return {match:{home:m.match?.home?.name||m.match?.home?.displayName,away:m.match?.away?.name||m.match?.away?.displayName,league:m.match?.league,venue:m.match?.venue,prediction:m.match?.prediction||m.predictions},teams,seasonStats:readableSeasonStats(m.statistics),lineupCount:m.lineups?.length||0,injuryCount:m.injuries?.length||0,notices:pre?.notices||[],manualStatsCount:evidence.manual?.length||0};
 }
 function deterministicSummary(evidence){
- const m=evidence.match,parts=[];
- const p=m.match?.prediction||m.predictions;
- if(p)parts.push('Szacowane prawdopodobieństwa 1/X/2: '+p.home+'/'+p.draw+'/'+p.away+'% (pewność: '+p.confidence+').');
- const pre=m.match?.preMatch;
- for(const [side,label] of [['home','Gospodarze'],['away','Goście']]){
-  const ctx=pre?.[side],f=ctx?.form||[],summary=summarizeForm(f);
-  if(summary)parts.push(label+': forma z '+summary.matches+' ostatnich meczów: '+summary.wins+' zwycięstwa, '+summary.draws+' remisy, '+summary.losses+' porażki; bramki '+summary.goalsFor+':'+summary.goalsAgainst+'.'); 
-  if(f.length)parts.push(label+' — wyniki: '+f.map(x=>x.result+' '+x.gf+':'+x.ga+' vs '+x.opponent).join(', ')+'.');
-  if(ctx?.injuries?.length)parts.push(label+' — absencje: '+ctx.injuries.map(x=>x.name+' ('+x.status+')').join(', ')+'.');
+ const m=evidence.match,compact=compactEvidence(evidence),parts=[];
+ const p=compact.match.prediction;
+ if(p)parts.push('Model wstępny 1/X/2: '+p.home+'/'+p.draw+'/'+p.away+'% (pewność '+(p.confidence||'nieokreślona')+', próba: '+(p.sampleHome??'?')+' meczów gospodarzy i '+(p.sampleAway??'?')+' gości).');
+ for(const side of ['home','away']){
+  const t=compact.teams[side],f=t.form,s=t.summary;
+  if(s){
+   parts.push(t.label+' — ostatnie '+s.matches+' meczów: '+s.wins+' zwycięstw, '+s.draws+' remisów, '+s.losses+' porażek; punkty/mecz '+s.pointsPerMatch+'; gole '+s.goalsFor+':'+s.goalsAgainst+' (średnio '+s.goalsForPerMatch+' strzelone i '+s.goalsAgainstPerMatch+' stracone na mecz).');
+   parts.push(t.label+' — dodatkowe wskaźniki: czyste konta '+s.cleanSheets+'/'+s.matches+', bez zdobytej bramki '+s.failedToScore+'/'+s.matches+', obie drużyny strzelały '+s.btts+'/'+s.matches+', over 2.5 gola '+s.over25+'/'+s.matches+'. Trend punktowy ostatnich 3 spotkań: '+s.trend+'.');
+   if(f.length)parts.push(t.label+' — wyniki chronologicznie od najnowszego: '+f.map(x=>x.result+' '+x.goalsFor+':'+x.goalsAgainst+' vs '+x.opponent+(x.venue?' ('+x.venue+')':'')).join('; ')+'.');
+  }else parts.push(t.label+': brak wystarczającej historii wyników.');
+  if(t.injuries.length)parts.push(t.label+' — zgłoszone absencje: '+t.injuries.map(x=>x.name+' ('+x.status+')').join(', ')+'.');
+  else parts.push(t.label+' — brak potwierdzonych danych o absencjach; nie oznacza to pełnego składu.');
  }
- if(pre?.notices?.length)parts.push('Ograniczenia danych: '+pre.notices.join(' '));
- if(Array.isArray(m.statistics)&&m.statistics.length)parts.push('Statystyki meczowe: '+JSON.stringify(m.statistics).slice(0,2500));
- if(Array.isArray(m.events)&&m.events.length)parts.push('Zdarzenia meczu: '+m.events.length+'.');
- if(Array.isArray(m.lineups)&&m.lineups.length)parts.push('Dostępne są dane składów: '+m.lineups.length+' wpisów.');
- if(Array.isArray(m.injuries)&&m.injuries.length)parts.push('Rekordy absencji: '+m.injuries.length+'.');
- if(evidence.manual.length)parts.push('Dodatkowe ręczne zestawy statystyk: '+JSON.stringify(evidence.manual).slice(0,2000));
+ if(compact.seasonStats.length)parts.push('Statystyki sezonowe: '+compact.seasonStats.join(' '));
+ if(compact.lineupCount)parts.push('Dostępne wpisy składów: '+compact.lineupCount+'.');
+ if(compact.injuryCount)parts.push('Rekordy absencji w szczegółach meczu: '+compact.injuryCount+'.');
+ if(compact.notices.length)parts.push('Ograniczenia: '+compact.notices.join(' '));
+ if(evidence.manual?.length)parts.push('Dostępne są '+evidence.manual.length+' ręcznie dodane zestawy statystyk, ale ich pola wymagają weryfikacji przed użyciem.');
  if(!parts.length)parts.push('Brak wystarczających danych do rzetelnej analizy.');
- return parts.join(' ')+' To podsumowanie oparte wyłącznie na dostępnych danych; nie jest gwarancją wyniku.';
+ return parts.join('\n\n')+'\n\nWniosek: dane są niepełne, więc nie należy podawać wysokiej pewności. To analiza statystyczna, nie gwarancja wyniku.';
+}
+async function askLocalLLM(compact){
+ if(process.env.LLM_ENABLED!=='true')throw new Error('Lokalny model AI jest wyłączony.');
+ const base=(process.env.OLLAMA_BASE_URL||'http://ollama:11434').replace(/\/$/,'');
+ const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
+ const response=await fetch(base+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,stream:false,messages:[{role:'system',content:systemPrompt},{role:'user',content:'/no_think\nPrzygotuj raport z sekcjami: Forma i skuteczność; Statystyki dodatkowe; Absencje i skład; Ocena ryzyka. Wskaż, które dane są nieznane. Nie powtarzaj surowego JSON. Maksymalnie 300 słów:\n'+JSON.stringify(compact)}],options:{temperature:0.15,num_ctx:4096,num_predict:500,num_thread:4},keep_alive:'5m'}),signal:AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS||60000))});
+ if(!response.ok)throw new Error('Ollama HTTP '+response.status);
+ const data=await response.json();const answer=data.message?.content?.trim();
+ if(!answer)throw new Error('Lokalny model nie zwrócił raportu.');
+ return answer;
 }
 export async function analyzeMatch(matchId,extra={}){
- const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
- const forceRefresh=extra.forceRefresh===true;
- const cacheKey='analysis:v5:'+String(matchId)+':'+model;
+ const model=process.env.OLLAMA_MODEL||'qwen3:0.6b',forceRefresh=extra.forceRefresh===true;
+ const cacheKey='analysis:v6:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(!forceRefresh&&cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  let match,providerNotice=null;
  try{match=await getMatchBundle(matchId,{forceRefresh});}catch(error){
   if(!extra.fixture)throw error;
-  providerNotice='SportScore nie udostępnił szczegółów tego meczu ('+error.message+'). Raport wykorzystuje wyłącznie dane terminarza.';
-  const f=extra.fixture;
-  match={source:'SportScore',match:f,fixture:[],statistics:[],events:[],lineups:[],players:[],injuries:[],predictions:null,live:f.status==='LIVE'};
+  providerNotice='Dostawca nie udostępnił szczegółów meczu ('+error.message+'). Wykorzystano tylko dane terminarza.';
+  match={source:'SportScore',match:extra.fixture,fixture:[],statistics:[],events:[],lineups:[],players:[],injuries:[],predictions:null,live:extra.fixture.status==='LIVE'};
  }
- const manual=await getManualStats(matchId);
- const evidence={match,manual,additionalContext:extra};
- try{
-  const result={mode:'local-llm',provider:'Ollama',model,evidence,report:await askLocalLLM(evidence),llmNotice:providerNotice,cached:false};
-  await writeCache(cacheKey,result,ANALYSIS_CACHE_TTL);return result;
- }catch(error){return {mode:'statistics-only',provider:null,evidence,report:deterministicSummary(evidence),llmNotice:[providerNotice,'Lokalny model jest niedostępny: '+error.message].filter(Boolean).join(' '),cached:false};}
+ const manual=await getManualStats(matchId),evidence={match,manual};
+ const compact=compactEvidence(evidence);
+ let report,mode='statistics-only',llmNotice=providerNotice;
+ try{report=await askLocalLLM(compact);mode='local-llm';}
+ catch(error){report=deterministicSummary(evidence);llmNotice=[providerNotice,'Model AI niedostępny: '+error.message+'. Wyświetlono analizę statystyczną.'].filter(Boolean).join(' ');}
+ const result={mode,provider:mode==='local-llm'?'Ollama':null,model:mode==='local-llm'?model:null,report,llmNotice,cached:false};
+ if(mode==='local-llm')await writeCache(cacheKey,result,ANALYSIS_CACHE_TTL);
+ return result;
 }

@@ -13,3 +13,65 @@
 
 .mm-team-head{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 8px;color:#85858d;font-size:10px;font-weight:700}.mm-team-head span:last-child{text-align:right}.mm-stat strong i{font-style:normal;color:#aaa;margin:0 5px}.mm-live-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.mm-live-row h3{margin:0}.mm-live{color:#e34c4c;font-size:10px;font-weight:800;letter-spacing:.08em}.mm-score{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin-top:14px;padding:18px;background:#f5f7fb;border:1px solid #e8ecf4;border-radius:15px;text-align:center}.mm-score span{font-size:12px;font-weight:700}.mm-score span:last-child{text-align:right}.mm-score span:first-child{text-align:left}.mm-score strong{font:800 30px Manrope;letter-spacing:-1px}.mm-event{display:grid;grid-template-columns:42px 1fr;gap:3px 10px;padding:10px 12px;border-bottom:1px solid #eceef2;font-size:11px}.mm-event b{grid-row:span 2;color:#3478f6}.mm-event strong{font-size:12px}.mm-event small{color:#999}.mm-cache-note{font-size:10px;color:#3478f6;margin:-5px 0 9px}
 @media(max-width:520px){.mm-score{gap:6px;padding:14px 8px}.mm-score span{font-size:10px}.mm-score strong{font-size:24px}.mm-stat strong{font-size:13px}}
+
+
+/* MatchMind — native iPhone layout + dark interface */
+html{width:100%;min-width:320px;max-width:100%;overflow-x:hidden;background:#090b10}
+body{width:100%;min-width:320px;max-width:100%;overflow-x:hidden;background:radial-gradient(ellipse at 85% 0%,#18243b 0,transparent 38%),#090b10;color:#f3f5fa}
+:root{color-scheme:dark;--muted:#9299a8;--line:#252b38;--blue:#6c9cff;background:#090b10;color:#f3f5fa}
+.topbar,main{width:100%;max-width:1180px}
+.brand{color:#f3f5fa}
+.avatar{background:#202737;color:#dce4f5}
+.hero h1 span{color:#7e8798}
+.metrics article,.league-group,.group-head,.search,.controls input[type=date],.icon-button,.filter,.league-picker-trigger,.league-picker-menu,.match-actions button,.mm-builder,.match-modal-card{background:#141923;color:#edf1f8;border-color:#283142;box-shadow:0 10px 28px #00000024}
+.metrics article span,.metrics small,.muted,.sub,.league-meta,.group-count,.time-label,.match-status,.prediction-title,.prob-labels,.confidence,.filter-summary{color:#929bad}
+.filter{border-color:#30394b;color:#b6bfce}
+.filter.active,.mm-builder-actions button{background:#315fae;border-color:#477bd0;color:#fff}
+.group-head{background:#111722;border-bottom-color:#283142}
+.time-label,.match,.mm-pick,.match-modal-card header{border-color:#252d3b}
+.match-actions button{border-color:#30394b;color:#e2e8f2}
+.match-actions button:hover{border-color:#6c9cff;color:#8db3ff}
+.prob-bars{background:#303747}
+.prob-bars span{background:#465064}
+.prob-bars span.best{background:#6c9cff}
+.league-picker-trigger strong{background:#202d43;color:#8db3ff}
+.picker-icon,.picker-chevron{color:#a8b1c0}
+.league-picker-menu{background:#151b26;border-color:#30394b}
+.picker-menu-head{border-color:#30394b}
+.picker-menu-head button,.league-check:hover{background:#222c3d;color:#a9c5ff}
+.league-check{color:#d4dbea}
+.mm-builder{background:linear-gradient(135deg,#151c29,#101722);border-color:#2a3548}
+#mm-builder-result{border-color:#2a3548;min-width:0;width:100%;max-width:100%;overflow:hidden}
+.mm-pick{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+.mm-pick b,.mm-pick p,.mm-pick small{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+.mm-warning,.mm-small{color:#a0a9b8;overflow-wrap:anywhere}
+.match-modal-shade{background:#02050bcc}
+.match-modal-card{background:#131a25}
+.mm-stat,.mm-empty,.mm-report,.report,.mm-score{background:#1b2432;border-color:#303b4e;color:#e0e6f0}
+.mm-stat span,.mm-empty,.mm-event small{color:#a0aabd}
+.mm-event{border-color:#30394b}
+.mm-close{background:#273246;color:#e5ebf5}
+footer{color:#788397}
+input{color-scheme:dark}
+@media(max-width:760px){
+ html,body{width:100%;overflow-x:hidden}
+ main{width:100%;max-width:100%;padding:20px 12px 42px}
+ .topbar{width:100%;max-width:100%;padding:0 13px}
+ .hero,.metrics,.toolbar,.controls,.league-filters,.match-groups,.league-group,.mm-builder{min-width:0;max-width:100%}
+ .mm-builder{width:100%;margin:18px 0 24px;padding:16px;overflow:hidden}
+ .mm-builder-actions{min-width:0;flex-wrap:wrap}
+ #mm-builder-result{grid-column:1/-1;min-width:0;overflow:hidden}
+ .mm-pick{grid-template-columns:minmax(0,1fr);gap:7px}
+ .mm-pick small{grid-column:1}
+ .match{min-width:0}
+}
+@media(max-width:430px){
+ main{padding-left:10px;padding-right:10px}
+ .metrics article{min-width:0;padding:10px 8px}
+ .metrics strong{overflow-wrap:anywhere}
+ .toolbar h2,.analysis-panel h2{font-size:23px}
+ .mm-builder h2{font-size:21px}
+ .mm-builder-actions button{max-width:100%;white-space:normal}
+ .match-modal{padding:6px}
+ .match-modal-card{width:100%;max-width:100%;padding:15px}
+}

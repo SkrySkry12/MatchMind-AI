@@ -2,7 +2,7 @@ import {getMatchBundle} from './sports.js';
 import {getManualStats} from './store.js';
 import {readCache,writeCache} from './cache.js';
 const ANALYSIS_CACHE_TTL=6*60*60;
-const systemPrompt='Jesteś analitykiem danych piłkarskich MatchMind AI. Otrzymujesz obiekt JSON z danymi z API. Analizuj wyłącznie dostarczone informacje. Nie wymyślaj statystyk, składów, kontuzji ani prawdopodobieństw. Jeśli danych brakuje, napisz to wprost. Oddziel fakty od interpretacji. Nie udzielaj porad bukmacherskich. Odpowiadaj po polsku, zwięźle, profesjonalnie i używaj nagłówków.';
+const systemPrompt='Jesteś analitykiem danych piłkarskich MatchMind AI. Otrzymujesz obiekt JSON z danych meczowych SportScore. Analizuj wyłącznie dostarczone informacje. Nie wymyślaj statystyk, składów, kontuzji ani prawdopodobieństw. Jeśli danych brakuje, napisz to wprost. Oddziel fakty od interpretacji. Nie udzielaj porad bukmacherskich. Odpowiadaj po polsku, zwięźle, profesjonalnie i używaj nagłówków.';
 async function askLocalLLM(evidence){
  if(process.env.LLM_ENABLED!=='true')throw new Error('Lokalny LLM jest wyłączony w konfiguracji.');
  const base=(process.env.OLLAMA_BASE_URL||'http://ollama:11434').replace(/\/$/,'');
@@ -23,7 +23,7 @@ function deterministicSummary(evidence){
 }
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
- const cacheKey='analysis:v1:'+String(matchId)+':'+model;
+ const cacheKey='analysis:v2:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  const [match,manual]=await Promise.all([getMatchBundle(matchId),getManualStats(matchId)]);

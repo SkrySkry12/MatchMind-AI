@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    ports: ["4000:4000"]
+    env_file: .env
+    depends_on: [db]
+    restart: unless-stopped
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: matchmind
+      POSTGRES_USER: matchmind
+      POSTGRES_PASSWORD: matchmind
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    restart: unless-stopped
+volumes:
+  pgdata:

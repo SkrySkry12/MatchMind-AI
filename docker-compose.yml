@@ -3,7 +3,8 @@ services:
     build: .
     ports: ["4000:4000"]
     env_file: .env
-    depends_on: [db]
+    depends_on:
+      - db
     restart: unless-stopped
   db:
     image: postgres:16-alpine
@@ -13,5 +14,12 @@ services:
       POSTGRES_PASSWORD: matchmind
     volumes: ["pgdata:/var/lib/postgresql/data"]
     restart: unless-stopped
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-ai"]
+    volumes: ["ollama:/root/.ollama"]
+    restart: unless-stopped
+    # For NVIDIA GPU support, add the appropriate deploy/device configuration for your host.
 volumes:
   pgdata:
+  ollama:

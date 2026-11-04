@@ -103,7 +103,9 @@ function addBuilder(){
    }));
    const profile=$('coupon-risk')?.value||'balanced',market=$('coupon-market')?.value||'all';
    const annotated=results.map((r,i)=>({...r,custom:customLines[i]||null,profile,market}));
-   out.innerHTML='<div class="coupon-result-head"><div><p class="eyebrow">MATCHMIND ANALYSIS</p><h3>'+(customLines.length?'Ocena Twojego kuponu':'Propozycja MatchMind AI')+'</h3></div><span>'+results.length+' zdarzeń</span></div>'+annotated.map((r,i)=>couponMatchHtml(r,i)).join('')+'<p class="coupon-note">Kursy nie są pobierane automatycznie. Wprowadzone kursy są danymi użytkownika i nie są przez MatchMind weryfikowane.</p>';
+   out.innerHTML='<div class="coupon-result-head"><div><p class="eyebrow">MATCHMIND ANALYSIS</p><h3>'+(customLines.length?'Ocena Twojego kuponu':'Propozycja MatchMind AI')+'</h3></div><span>'+results.length+' zdarzeń</span></div>'+annotated.map((r,i)=>couponMatchHtml(r,i)).join('')+'<div class="coupon-total-odds" id="coupon-total-odds">Łączny kurs: <strong>uzupełnij kursy</strong></div><p class="coupon-note">Kursy nie są pobierane automatycznie. Wprowadzone kursy są danymi użytkownika i nie są przez MatchMind weryfikowane.</p>';
+   const recalculateTotal=()=>{const entered=customLines.length?customLines.map(x=>Number(String(x.odds||'').replace(',','.'))):[...out.querySelectorAll('.coupon-odds-input')].map(x=>Number(String(x.value||'').replace(',','.')));const total=$('coupon-total-odds');if(!total)return;const valid=entered.length&&entered.every(x=>Number.isFinite(x)&&x>=1.01);total.innerHTML=valid?'Łączny kurs wpisanych zdarzeń: <strong>'+entered.reduce((a,b)=>a*b,1).toFixed(2).replace('.',',')+'</strong>':'Łączny kurs: <strong>uzupełnij wszystkie kursy (opcjonalnie)</strong>';};
+   out.querySelectorAll('.coupon-odds-input').forEach(input=>input.addEventListener('input',recalculateTotal));recalculateTotal();
   }catch(error){out.innerHTML='<p class="mm-warning">'+safe(error?.message||'Nie udało się przeanalizować kuponu.')+'</p>';}
   finally{button.dataset.running='0';button.disabled=false;button.textContent=customLines.length?'Przeanalizuj mój kupon →':'Utwórz propozycję ponownie →';}
  }

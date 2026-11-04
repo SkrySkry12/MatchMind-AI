@@ -1,6 +1,6 @@
 import {getMatchBundle} from './sports.js';
 import {getManualStats} from './store.js';
-import {readCache,writeCache} from './cache.js';
+import {readCache,writeCache,saveForecast} from './cache.js';
 const ANALYSIS_CACHE_TTL=20*60;
 const systemPrompt='Jesteś analitykiem piłkarskim MatchMind AI. Analizuj wyłącznie dostarczone fakty. Uwzględniaj ostatnie 5 meczów, gole strzelone i stracone, punkty na mecz, czyste konta, mecze bez gola, BTTS, over 2.5, serię wyników, przewagę własnego boiska, statystyki sezonowe oraz potwierdzone absencje. Nie traktuj samych zwycięstw i porażek jako pełnej analizy. Nie wymyślaj danych ani składów. Oddziel fakty od szacunków, wskaż brakujące dane i czynniki ryzyka. Nie zawyżaj pewności. Pisz po polsku, czytelnie, z krótkimi nagłówkami i maksymalnie 300 słowami.';
 function summarizeWindow(form){
@@ -129,7 +129,7 @@ function buildQuickReadout(compact){
 }
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b',forceRefresh=extra.forceRefresh===true;
- const cacheKey='analysis:v10:'+String(matchId)+':'+model;
+ const cacheKey='analysis:v11:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(!forceRefresh&&cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  let match,providerNotice=null;
@@ -154,7 +154,18 @@ export async function analyzeMatch(matchId,extra={}){
   try{report=await askLocalLLM(compact);mode='local-llm';provider='Ollama';usedModel=model;}
   catch(error){report=deterministicSummary(evidence);llmNotice=[providerNotice,'Model lokalny niedostępny: '+error.message+'. Wyświetlono analizę statystyczną.'].filter(Boolean).join(' ');}
  }else report=deterministicSummary(evidence);
- const result={mode,provider,model:usedModel,report,quick:buildQuickReadout(compact),llmNotice,cached:false};
+ const quick=buildQuickReadout(compact);
+ const result={mode,provider,model:usedModel,report,quick,llmNotice,cached:false};
+ const fixture=match.match||extra.fixture||{},kickoff=fixture.date||fixture.kickoff||fixture.startTime;
+ const kickoffMs=Date.parse(kickoff||'');
+ const status=String(fixture.status||'NS').toUpperCase();
+ if(Number.isFinite(kickoffMs)&&kickoffMs>Date.now()&&!['LIVE','FT','AET','PEN','POSTPONED','CANCELLED'].includes(status)){
+  const probabilities=quick.probabilities;
+  const goals=quick.goals?.available?quick.goals:null;
+  if(probabilities||goals?.available){
+   try{await saveForecast({matchId:String(matchId),home:fixture.home?.name||fixture.home?.displayName||'Gospodarze',away:fixture.away?.name||fixture.away?.displayName||'Goście',league:fixture.league||null,kickoff:new Date(kickoffMs).toISOString(),prediction:{probabilities,expectedGoals:goals?{home:goals.lambdaHome,away:goals.lambdaAway}:null,over25:goals?.over25??null,btts:goals?.btts??null,pick:quick.pick?.code||null}});}catch(error){console.error('Forecast history save failed:',error.message);}
+  }
+ }
  if(mode!=='statistics-only')await writeCache(cacheKey,result,ANALYSIS_CACHE_TTL);
  return result;
 }

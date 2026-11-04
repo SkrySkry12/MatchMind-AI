@@ -19,7 +19,8 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       DEMO_MODE: ${DEMO_MODE:-true}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
     mem_limit: 512m
   db:
@@ -32,6 +33,11 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
     mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matchmind -d matchmind"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
   ollama:
     image: ollama/ollama:latest
     profiles: ["local-ai"]

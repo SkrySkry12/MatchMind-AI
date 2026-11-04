@@ -4,6 +4,13 @@ const FILTER_STORAGE_KEY='matchmind:selected-leagues:v1';
 function readSavedLeagues(){try{const v=JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY)||'null');return Array.isArray(v)?new Set(v.filter(x=>typeof x==='string')):null;}catch{return null;}}
 function saveSelectedLeagues(){try{localStorage.setItem(FILTER_STORAGE_KEY,JSON.stringify([...selectedLeagues]));}catch{}}
 let liveRefreshTimer=null,activeModalMatch=null;
+function renderSportScoreSquad(data){
+ if(data?.source!=='SportScore')return '<section class="mm-squad-section"><div class="mm-squad-head"><h3>Składy i absencje · SportScore</h3><span class="mm-source-tag">Tylko SportScore</span></div><p class="mm-empty">Dla tego spotkania szczegóły pochodzą z innego źródła. Zgodnie z ustawieniem MatchMind nie pobiera składów ani absencji z ESPN. Dane tej sekcji pojawią się, gdy SportScore udostępni szczegóły meczu.</p></section>';
+ const lineups=Array.isArray(data.lineups)?data.lineups:[],injuries=Array.isArray(data.injuries)?data.injuries:[];
+ const lineupHtml=lineups.length?lineups.map(group=>'<article class="mm-squad-team"><header><strong>'+safe(group.team||'Drużyna')+'</strong>'+(group.formation?'<span>Formacja '+safe(group.formation)+'</span>':'')+'</header>'+(group.players?.length?'<ul>'+group.players.map(p=>'<li><span>'+safe(p.name)+'</span><small>'+(p.number!=null?'#'+safe(p.number)+' · ':'')+safe(p.position||'')+(p.starter===true?' · Podstawowy':p.starter===false?' · Rezerwowy':'')+'</small></li>').join('')+'</ul>':'<p class="mm-empty">SportScore nie zwrócił listy zawodników.</p>')+'</article>').join(''):'<p class="mm-empty">Brak składów w odpowiedzi SportScore. Nie uzupełniamy ich przewidywaniami.</p>';
+ const injuryHtml=injuries.length?'<ul class="mm-absence-list">'+injuries.map(p=>'<li><strong>'+safe(p.name)+'</strong>'+(p.team?' · '+safe(p.team):'')+'<span>'+safe(p.status)+(p.reason&&p.reason!==p.status?' · '+safe(p.reason):'')+'</span></li>').join('')+'</ul>':'<p class="mm-empty">SportScore nie zwrócił potwierdzonych rekordów absencji. Brak wpisów nie oznacza, że wszyscy zawodnicy są dostępni.</p>';
+ return '<section class="mm-squad-section"><div class="mm-squad-head"><h3>Składy i absencje · SportScore</h3><span class="mm-source-tag">Źródło: SportScore</span></div><div class="mm-squad-grid">'+lineupHtml+'</div><h4>Kontuzje i absencje</h4>'+injuryHtml+'<p class="mm-squad-note">Wyświetlane są wyłącznie informacje zwrócone przez SportScore. Brak danych nie jest interpretowany jako potwierdzony pełny skład.</p></section>';
+}
 function renderMatchOverview(data,m){
  const fixture=data.fixture?.[0],goals=fixture?.goals||{},events=Array.isArray(data.events)?data.events:[];
  const teams=data.statistics||[];
@@ -21,7 +28,7 @@ function renderMatchOverview(data,m){
  const predHtml=pred?'<section><h3>Szacowane szanse przedmeczowe</h3><div class="mm-stats"><div class="mm-stat"><span>1 · Gospodarze</span><strong>'+pred.home+'%</strong></div><div class="mm-stat"><span>X · Remis</span><strong>'+pred.draw+'%</strong></div><div class="mm-stat"><span>2 · Goście</span><strong>'+pred.away+'%</strong></div></div><p class="mm-empty">Pewność: '+safe(pred.confidence)+' · próbka: '+pred.sampleHome+' / '+pred.sampleAway+' ostatnich meczów. To estymacja statystyczna, nie kurs ani gwarancja.</p></section>':'';
  const body=$('mm-body');
  const report=body.querySelector('#mm-ai-report')?.outerHTML||'<div id="mm-ai-report" class="mm-report">Analiza AI ładuje się niezależnie od statystyk…</div>';
- body.innerHTML='<section><div class="mm-live-row"><h3>Wynik i przebieg</h3><span class="'+(data.live?'mm-live':'')+'">'+safe(status)+(data.live?' · NA ŻYWO':'')+'</span></div>'+score+'</section><section><h3>Statystyki meczu</h3>'+statHtml+'</section><section><h3>Bramki</h3>'+eventsHtml+'</section>'+predHtml+preHtml+'<section><h3>Analiza MatchMind</h3>'+report+'</section>';
+ body.innerHTML='<section><div class="mm-live-row"><h3>Wynik i przebieg</h3><span class="'+(data.live?'mm-live':'')+'">'+safe(status)+(data.live?' · NA ŻYWO':'')+'</span></div>'+score+'</section><section><h3>Statystyki meczu</h3>'+statHtml+'</section><section><h3>Bramki</h3>'+eventsHtml+'</section>'+predHtml+preHtml+renderSportScoreSquad(data)+'<section><h3>Analiza MatchMind</h3>'+report+'</section>';
 }
 async function refreshMatchOverview(m){
  const r=await fetch('/api/matches/'+encodeURIComponent(m.id)+'/overview');const d=await r.json();if(!r.ok)throw new Error(d.error||'Nie udało się pobrać danych meczu');

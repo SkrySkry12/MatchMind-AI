@@ -1,18 +1,23 @@
 import {getMatchBundle} from './sports.js';
 import {getManualStats} from './store.js';
 import {readCache,writeCache} from './cache.js';
-const ANALYSIS_CACHE_TTL=6*60*60;
-const systemPrompt='Jesteś analitykiem danych piłkarskich MatchMind AI. Otrzymujesz obiekt JSON z danych meczowych SportScore. Analizuj wyłącznie dostarczone informacje. Nie wymyślaj statystyk, składów, kontuzji ani prawdopodobieństw. Jeśli danych brakuje, napisz to wprost. Oddziel fakty od interpretacji. Nie udzielaj porad bukmacherskich. Odpowiadaj po polsku, zwięźle, profesjonalnie i używaj nagłówków.';
+const ANALYSIS_CACHE_TTL=20*60;
+const systemPrompt='Jesteś analitykiem piłkarskim MatchMind AI. Otrzymujesz dane z ESPN lub SportScore oraz historię ostatnich meczów i raporty absencji. Korzystaj wyłącznie z dostarczonych danych. Oceniaj formę, gole zdobywane i tracone oraz dostępne absencje. Prawdopodobieństwa MatchMind są orientacyjnym szacunkiem modelu, nie gwarancją. Nie wymyślaj brakujących danych. Zaznacz ograniczenia. Pisz po polsku, zwięźle i używaj nagłówków.';
 async function askLocalLLM(evidence){
  if(process.env.LLM_ENABLED!=='true')throw new Error('Lokalny LLM jest wyłączony w konfiguracji.');
  const base=(process.env.OLLAMA_BASE_URL||'http://ollama:11434').replace(/\/$/,'');
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
- const response=await fetch(base+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,stream:false,messages:[{role:'system',content:systemPrompt},{role:'user',content:'/no_think\nPrzygotuj krótki raport analityczny na podstawie danych. Nie przekraczaj 350 słów:\n'+JSON.stringify(evidence)}],options:{temperature:0.2,num_ctx:2048,num_predict:450,num_thread:4},keep_alive:'5m'}),signal:AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS||45000))});
+ const response=await fetch(base+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,stream:false,messages:[{role:'system',content:systemPrompt},{role:'user',content:'/no_think\nPrzygotuj krótki raport analityczny na podstawie danych. Nie przekraczaj 250 słów:\n'+JSON.stringify(evidence)}],options:{temperature:0.2,num_ctx:2048,num_predict:300,num_thread:4},keep_alive:'5m'}),signal:AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS||30000))});
  if(!response.ok)throw new Error('Ollama HTTP '+response.status);
  const data=await response.json();return data.message?.content||'Lokalny model nie zwrócił raportu.';
 }
 function deterministicSummary(evidence){
  const m=evidence.match,parts=[];
+ const p=m.match?.prediction||m.predictions;
+ if(p)parts.push('Szacunek MatchMind: 1 '+p.home+'%, X '+p.draw+'%, 2 '+p.away+'% (pewność: '+p.confidence+').');
+ const pre=m.match?.preMatch;
+ for(const [side,label] of [['home','Gospodarze'],['away','Goście']]){const ctx=pre?.[side];if(ctx?.form?.length)parts.push(label+': ostatnie '+ctx.form.length+' spotkań — '+ctx.form.map(x=>x.result+' '+x.gf+':'+x.ga).join(', ')+'.');if(ctx?.injuries?.length)parts.push(label+' — absencje: '+ctx.injuries.map(x=>x.name+' ('+x.status+')').join(', ')+'.');}
+ if(pre?.notices?.length)parts.push('Ograniczenia danych: '+pre.notices.join(' '));
  if(Array.isArray(m.statistics)&&m.statistics.length)parts.push('Dostępne są statystyki meczowe dla '+m.statistics.length+' zespołów.');
  if(Array.isArray(m.events))parts.push('Zdarzenia meczowe: '+m.events.length+'.');
  if(Array.isArray(m.lineups))parts.push('Rekordy składów: '+m.lineups.length+'.');
@@ -23,7 +28,7 @@ function deterministicSummary(evidence){
 }
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
- const cacheKey='analysis:v2:'+String(matchId)+':'+model;
+ const cacheKey='analysis:v3:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  let match,providerNotice=null;

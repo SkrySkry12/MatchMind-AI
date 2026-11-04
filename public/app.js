@@ -23,8 +23,7 @@ function renderMatchOverview(data,m){
  const eventsHtml=goalsHtml||'<p class="mm-empty">Brak zdarzeń bramkowych w danych dostawcy.</p>';
  const pre=data.match?.preMatch,pred=data.match?.prediction;
  const formLine=(label,ctx)=>label+': '+(ctx?.form?.length?ctx.form.map(x=>x.result+' '+x.gf+':'+x.ga).join(' · '):'brak danych');
- const absences=(label,ctx)=>ctx?.injuries?.length?'<p><b>'+label+':</b> '+ctx.injuries.map(x=>safe(x.name)+' ('+safe(x.status)+')').join(', ')+'</p>':'';
- const preHtml=pre?'<section><h3>Forma i absencje</h3><p>'+safe(formLine('Gospodarze',pre.home))+'</p><p>'+safe(formLine('Goście',pre.away))+'</p>'+absences('Gospodarze',pre.home)+absences('Goście',pre.away)+(pre.notices?.length?'<p class="mm-empty">'+safe(pre.notices.join(' '))+'</p>':'')+'</section>':'';
+ const preHtml=pre?'<section><h3>Forma drużyn</h3><p>'+safe(formLine('Gospodarze',pre.home))+'</p><p>'+safe(formLine('Goście',pre.away))+'</p>'+(pre.notices?.length?'<p class="mm-empty">'+safe(pre.notices.join(' '))+'</p>':'')+'</section>':'';
  const predHtml=pred?'<section><h3>Szacowane szanse przedmeczowe</h3><div class="mm-stats"><div class="mm-stat"><span>1 · Gospodarze</span><strong>'+pred.home+'%</strong></div><div class="mm-stat"><span>X · Remis</span><strong>'+pred.draw+'%</strong></div><div class="mm-stat"><span>2 · Goście</span><strong>'+pred.away+'%</strong></div></div><p class="mm-empty">Pewność: '+safe(pred.confidence)+' · próbka: '+pred.sampleHome+' / '+pred.sampleAway+' ostatnich meczów. To estymacja statystyczna, nie kurs ani gwarancja.</p></section>':'';
  const body=$('mm-body');
  const report=body.querySelector('#mm-ai-report')?.outerHTML||'<div id="mm-ai-report" class="mm-report">Analiza AI ładuje się niezależnie od statystyk…</div>';

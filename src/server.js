@@ -3,7 +3,7 @@ import express from 'express'; import helmet from 'helmet'; import cors from 'co
 import {getFixtures,getFixtureStats,getApiUsage} from './sports.js'; import {analyzeMatch} from './analysis.js'; import {saveManualStats,getManualStats} from './store.js';
 const app=express(),port=Number(process.env.PORT||4000),root=path.dirname(fileURLToPath(import.meta.url));
 app.use(helmet({contentSecurityPolicy:false}));app.use(cors());app.use(express.json({limit:'100kb'}));app.use(express.static(path.join(root,'../public')));
-app.get('/api/health',(_q,s)=>s.json({ok:true,app:'MatchMind AI',footballApi:getApiUsage(),llm:{provider:'Ollama',model:process.env.OLLAMA_MODEL||'qwen3:4b',configured:Boolean(process.env.OLLAMA_BASE_URL||'http://ollama:11434')}}));
+app.get('/api/health',(_q,s)=>s.json({ok:true,app:'MatchMind AI',footballApi:getApiUsage(),llm:{provider:'Ollama',model:process.env.OLLAMA_MODEL||'qwen3:0.6b',enabled:process.env.LLM_ENABLED==='true'}}));
 app.get('/api/usage',(_q,s)=>s.json(getApiUsage()));
 app.get('/api/fixtures',async(q,s)=>{try{s.json(await getFixtures(q.query.date));}catch(e){s.status(502).json({error:e.message});}});
 app.get('/api/matches/:id/stats',async(q,s)=>{try{const [provider,manual]=await Promise.all([getFixtureStats(q.params.id),getManualStats(q.params.id)]);s.json({...provider,manual});}catch(e){s.status(502).json({error:e.message});}});

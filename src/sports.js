@@ -60,11 +60,19 @@ function eventToMatch(e,league){
   prediction:null,source:'ESPN'};
 }
 
+function scoreNumber(score){
+ const raw=score&&typeof score==='object'?val(score.value,score.displayValue,score.score):score;
+ if(raw===null||raw===undefined||raw==='')return null;
+ const n=Number(raw);return Number.isFinite(n)?n:null;
+}
 function resultForTeam(event,teamId){
  const comp=event.competitions?.[0]||{},cs=array(comp.competitors);
  const own=cs.find(x=>String(x.team?.id)===String(teamId)),opp=cs.find(x=>String(x.team?.id)!==String(teamId));
- if(!own||!opp||own.score==null||opp.score==null||state(event.status||comp.status)!=='FT')return null;
- const gf=Number(own.score),ga=Number(opp.score);if(!Number.isFinite(gf)||!Number.isFinite(ga))return null;
+ const status=event.status||comp.status;
+ const completed=Boolean(status?.type?.completed)||state(status)==='FT';
+ if(!own||!opp||!completed)return null;
+ const gf=scoreNumber(own.score),ga=scoreNumber(opp.score);
+ if(gf===null||ga===null)return null;
  return {date:val(comp.date,event.date),opponent:opp.team?.displayName||opp.team?.name||'Rywal',gf,ga,result:gf>ga?'W':gf===ga?'D':'L'};
 }
 function poisson(lambda,k){let p=Math.exp(-lambda);for(let i=1;i<=k;i++)p*=lambda/i;return p;}
@@ -90,13 +98,13 @@ async function teamContext(league,teamId,includeInjuries=false){
   json(ESPN,base+'/schedule',TTL.team).catch(()=>null),
   includeInjuries?json(ESPN,base+'/injuries',TTL.team).catch(()=>null):Promise.resolve(null)
  ]);
- const events=array(schedule?.events||schedule?.season?.events||schedule?.data?.events);
+ const events=array(schedule?.events||schedule?.season?.events||schedule?.data?.events||schedule?.schedule?.events||schedule?.team?.events);
  const form=events.map(e=>resultForTeam(e,teamId)).filter(Boolean).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,5);
  const injuries=array(injuryData?.items||injuryData?.injuries||injuryData?.athletes||injuryData?.data).map(x=>({
   name:x.athlete?.displayName||x.athlete?.fullName||x.displayName||x.name||'Zawodnik',
   status:x.status||x.type||x.details||'Status nieznany'
  })).slice(0,12);
- return {form,injuries,notice:!schedule?'Brak historii ostatnich spotkań.':form.length<3?'Za mało danych historycznych do wiarygodnego oszacowania (wymagane min. 3 mecze).':includeInjuries&&!injuryData?'Brak raportu kontuzji od dostawcy.':null};
+ return {form,injuries,notice:!schedule?'Nie udało się pobrać terminarza drużyny.':form.length<3?'ESPN zwrócił terminarz, ale po odczytaniu wyników dostępnych jest tylko '+form.length+' zakończonych spotkań.':includeInjuries&&!injuryData?'Brak raportu kontuzji od dostawcy.':null};
  })();teamPromises.set(promiseKey,promise);try{return await promise;}finally{teamPromises.delete(promiseKey);}
 }
 async function enrichFixture(f){

@@ -8,9 +8,11 @@ const LIVE=new Set(['live','in_play','inplay','1h','2h','ht','et','bt','p','play
 const FINISHED=new Set(['finished','complete','completed','ft','aet','pen']);
 
 function first(...values){return values.find(v=>v!==undefined&&v!==null&&v!=='');}
-function unwrapList(data){
+function unwrapList(data,depth=0){
  if(Array.isArray(data))return data;
- for(const key of ['fixtures','matches','results','data','items'])if(Array.isArray(data?.[key]))return data[key];
+ if(!data||typeof data!=='object'||depth>3)return [];
+ for(const key of ['fixtures','matches','results','items'])if(Array.isArray(data[key]))return data[key];
+ for(const key of ['data','response','result']){const found=unwrapList(data[key],depth+1);if(found.length)return found;}
  return [];
 }
 function team(raw={},side=''){
@@ -27,12 +29,12 @@ function statusOf(x){
 function mapMatch(x){
  const home=team(x,'home'),away=team(x,'away');
  const date=first(x.date,x.start_time,x.kickoff,x.datetime,x.time,null);
- const comp=x.competition||x.league||x.tournament||{};
- const slug=first(x.slug,x.match_slug,x.url_slug,x.match?.slug,x.fixture?.slug,x.event?.slug,null);
+ const comp=x.competition||x.league||x.tournament||x.competition_name||{};
+ const slug=first(x.slug,x.match_slug,x.url_slug,x.match?.slug,x.fixture?.slug,x.event?.slug,x.match?.url_slug,x.fixture?.url_slug,null);
  const id=String(first(slug,''));
  return {
   id,slug:String(slug||id),date:date&&!Number.isNaN(new Date(date).getTime())?new Date(date).toISOString():new Date().toISOString(),
-  league:first(comp.name,comp.title,comp.display_name,comp.short_name,comp.slug,typeof comp==='string'?comp:null,x.competition_name,x.league_name,x.tournament_name,'Pozostałe rozgrywki'),
+  league:first(comp.name,comp.title,comp.display_name,comp.short_name,comp.competition_name,comp.slug,typeof comp==='string'?comp:null,x.competition_name,x.league_name,x.tournament_name,'Pozostałe rozgrywki'),
   leagueId:first(comp.id,comp.slug,null),season:first(comp.season,x.season,null),
   country:first(comp.country?.name,comp.country,x.country?.name,x.country,null),
   logo:first(comp.logo,comp.image,null),flag:first(comp.flag,null),
@@ -74,7 +76,7 @@ export async function getMatchBundle(id){
  const slug=String(id||'').trim();
  if(!slug||slug.length>200)throw new Error('Dostawca nie przekazał prawidłowego slug meczu. Odśwież terminarz i spróbuj ponownie.');
  const data=await request('/api/widget/match/?sport=football&slug='+encodeURIComponent(slug),{ttl:TTL.match});
- const raw=data.match||data.fixture||data.data||data;
+ const raw=data.match||data.fixture||data.data?.match||data.data?.fixture||data.data||data.result?.match||data.result||data;
  const mapped=mapMatch(raw);
  const timeline=first(raw.timeline,raw.events,raw.incidents,data.timeline,data.events,[]);
  const lineups=first(raw.lineups,raw.lineup,data.lineups,[]);

@@ -27,7 +27,7 @@ services:
       OLLAMA_MAX_LOADED_MODELS: "1"
       OLLAMA_KEEP_ALIVE: "5m"
     restart: unless-stopped
-    mem_limit: 2304m
+    mem_limit: 1536m
 volumes:
   pgdata:
   ollama:

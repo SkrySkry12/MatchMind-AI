@@ -1,5 +1,7 @@
 import {getMatchBundle} from './sports.js';
 import {getManualStats} from './store.js';
+import {readCache,writeCache} from './cache.js';
+const ANALYSIS_CACHE_TTL=6*60*60;
 const systemPrompt='Jesteś analitykiem danych piłkarskich MatchMind AI. Otrzymujesz obiekt JSON z danymi z API. Analizuj wyłącznie dostarczone informacje. Nie wymyślaj statystyk, składów, kontuzji ani prawdopodobieństw. Jeśli danych brakuje, napisz to wprost. Oddziel fakty od interpretacji. Nie udzielaj porad bukmacherskich. Odpowiadaj po polsku, zwięźle, profesjonalnie i używaj nagłówków.';
 async function askLocalLLM(evidence){
  if(process.env.LLM_ENABLED!=='true')throw new Error('Lokalny LLM jest wyłączony w konfiguracji.');
@@ -20,8 +22,14 @@ function deterministicSummary(evidence){
  return parts.join(' ')+' To podsumowanie techniczne, nie prognoza wyniku. Brakujące dane nie są uzupełniane domysłami.';
 }
 export async function analyzeMatch(matchId,extra={}){
+ const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
+ const cacheKey='analysis:v1:'+String(matchId)+':'+model;
+ const cached=await readCache(cacheKey);
+ if(cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  const [match,manual]=await Promise.all([getMatchBundle(matchId),getManualStats(matchId)]);
  const evidence={match,manual,additionalContext:extra};
- try{return {mode:'local-llm',provider:'Ollama',model:process.env.OLLAMA_MODEL||'qwen3:0.6b',evidence,report:await askLocalLLM(evidence)};}
- catch(error){return {mode:'statistics-only',provider:null,evidence,report:deterministicSummary(evidence),llmNotice:'Lokalny model jest niedostępny: '+error.message};}
+ try{
+  const result={mode:'local-llm',provider:'Ollama',model,evidence,report:await askLocalLLM(evidence),cached:false};
+  await writeCache(cacheKey,result,ANALYSIS_CACHE_TTL);return result;
+ }catch(error){return {mode:'statistics-only',provider:null,evidence,report:deterministicSummary(evidence),llmNotice:'Lokalny model jest niedostępny: '+error.message,cached:false};}
 }

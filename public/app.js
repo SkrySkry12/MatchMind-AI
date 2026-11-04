@@ -52,9 +52,15 @@ function couponMatchHtml(r,i){
  if(r.error)return '<article class="mm-pick">'+name+'<p class="mm-warning">Nie udało się ocenić: '+safe(r.error)+'</p></article>';
  const q=r.data.quick;
  if(!q)return '<article class="mm-pick">'+name+'<p class="mm-warning">Brak podsumowania statystycznego.</p></article>';
+ const probsForRisk=q.probabilities?[q.probabilities.home,q.probabilities.draw,q.probabilities.away].map(Number).filter(Number.isFinite):[];
+ const ranked=[...probsForRisk].sort((a,b)=>b-a),top=ranked[0]??0,margin=ranked.length>1?top-ranked[1]:0;
+ const sample=Math.min(Number(q.home?.matches)||0,Number(q.away?.matches)||0);
+ const risk=sample<3||!probsForRisk.length||top<45||margin<5?'Wysokie':top<58||margin<12||sample<5?'Umiarkowane':'Niższe';
+ const riskClass=risk==='Wysokie'?'high':risk==='Umiarkowane'?'medium':'low';
+ const riskReason=sample<3?'Mała próbka danych':!probsForRisk.length?'Brak prawdopodobieństw 1X2':top<45?'Brak wyraźnego faworyta':margin<5?'Bardzo mała różnica między typami':sample<5?'Ograniczona liczba meczów w próbce':'Wyraźniejszy sygnał statystyczny';
  const pick=q.pick?'<div class="mm-quick-pick"><small>NAJMOCNIEJSZE WSKAZANIE STATYSTYCZNE</small><strong>'+safe(q.pick.code)+' · '+safe(q.pick.label)+'</strong>'+(q.pick.probability!==null?' <span>'+safe(q.pick.probability)+'%</span>':'')+'<p>'+safe(q.rationale.join(' '))+'</p></div>':'<div class="mm-quick-pick"><strong>Brak podstaw do wskazania typu</strong><p>Za mało danych albo brak modelowych prawdopodobieństw.</p></div>';
  const probs=q.probabilities?'<div class="mm-quick-probs"><span>1: '+q.probabilities.home+'%</span><span>X: '+q.probabilities.draw+'%</span><span>2: '+q.probabilities.away+'%</span></div>':'';
- return '<article class="mm-pick">'+name+providerBadge(r.data)+pick+probs+'<div class="mm-quick-grid">'+quickStatsHtml(r.m.home?.name||'Gospodarze',q.home)+quickStatsHtml(r.m.away?.name||'Goście',q.away)+'</div><p class="mm-warning">'+safe(q.warning)+'</p></article>';
+ return '<article class="mm-pick">'+name+providerBadge(r.data)+'<div class="mm-risk '+riskClass+'"><strong>Ryzyko: '+risk+'</strong><span>'+riskReason+'</span></div>'+pick+probs+'<div class="mm-compare-title">Porównanie statystyk</div><div class="mm-quick-grid">'+quickStatsHtml(r.m.home?.name||'Gospodarze',q.home)+quickStatsHtml(r.m.away?.name||'Goście',q.away)+'</div><p class="mm-warning">'+safe(q.warning)+'</p></article>';
 }
 function addBuilder(){
  if(document.getElementById('mm-builder'))return;

@@ -99,7 +99,7 @@ async function teamContext(league,teamId,includeInjuries=false,forceRefresh=fals
   includeInjuries?json(ESPN,base+'/injuries',TTL.team,forceRefresh).catch(()=>null):Promise.resolve(null)
  ]);
  const events=array(schedule?.events||schedule?.season?.events||schedule?.data?.events||schedule?.schedule?.events||schedule?.team?.events);
- const form=events.map(e=>resultForTeam(e,teamId)).filter(Boolean).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,5);
+ const form=events.map(e=>resultForTeam(e,teamId)).filter(Boolean).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,10);
  const injuries=array(injuryData?.items||injuryData?.injuries||injuryData?.athletes||injuryData?.data).map(x=>({
   name:x.athlete?.displayName||x.athlete?.fullName||x.displayName||x.name||'Zawodnik',
   status:x.status||x.type||x.details||'Status nieznany'

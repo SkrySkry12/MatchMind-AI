@@ -1,6 +1,6 @@
 import {readCache,writeCache,cacheInfo} from './cache.js';
 
-const BASE=(process.env.SPORTSCORE_API_BASE_URL||'https://sportscore.com').replace(/\\/$/,'');
+const BASE=(process.env.SPORTSCORE_API_BASE_URL||'https://sportscore.com').replace(/\/$/,'');
 const SOURCE='SportScore';
 const TTL={fixtures:60,match:45,standings:300,team:180};
 const stats={requests:0,cacheHits:0,staleFallbacks:0,remaining:null,limit:null};

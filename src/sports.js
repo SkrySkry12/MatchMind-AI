@@ -21,16 +21,16 @@ function dayUTC(date){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||Number.isNaN(Date.parse(d+'T00:00:00Z')))throw new Error('Nieprawidłowa data terminarza.');
  return d;
 }
-async function json(base,path,ttl){
- const key='mm:v4:'+base+path,hit=await readCache(key);
- if(hit&&hit.expires>Date.now()){stats.cacheHits++;return hit.data;}
+async function json(base,path,ttl,forceRefresh=false){
+ const key='mm:v5:'+base+path,hit=await readCache(key);
+ if(!forceRefresh&&hit&&hit.expires>Date.now()){stats.cacheHits++;return hit.data;}
  try{
   const r=await fetch(base+path,{headers:{accept:'application/json','user-agent':'MatchMind-AI/2.0'},signal:AbortSignal.timeout(9000)});
   stats.requests++;
   if(!r.ok)throw new Error('HTTP '+r.status+' ('+new URL(base).hostname+')');
   const d=await r.json();
   await writeCache(key,d,ttl);return d;
- }catch(e){if(hit){stats.staleFallbacks++;return hit.data;}throw e;}
+ }catch(e){if(!forceRefresh&&hit){stats.staleFallbacks++;return hit.data;}throw e;}
 }
 function state(s){
  const type=str(s?.type?.name||s?.type?.state||s?.type||s?.name||s?.state).toLowerCase();
@@ -89,14 +89,14 @@ function estimateProbabilities(h,a){
  return {home:Math.round(home/t*100),draw:Math.round(draw/t*100),away:Math.round(away/t*100),source:'Model statystyczny MatchMind',confidence:n>=8?'średnia':'niska',sampleHome:h.length,sampleAway:a.length,expectedGoals:{home:Number(hx.toFixed(2)),away:Number(ax.toFixed(2))}};
 }
 const teamPromises=new Map();
-async function teamContext(league,teamId,includeInjuries=false){
+async function teamContext(league,teamId,includeInjuries=false,forceRefresh=false){
  if(!teamId)return {form:[],injuries:[],notice:'Brak ID drużyny.'};
  const promiseKey=league+':'+teamId+':'+includeInjuries;if(teamPromises.has(promiseKey))return teamPromises.get(promiseKey);
  const promise=(async()=>{
  const base='/apis/site/v2/sports/soccer/'+league+'/teams/'+encodeURIComponent(teamId);
  const [schedule,injuryData]=await Promise.all([
-  json(ESPN,base+'/schedule',TTL.team).catch(()=>null),
-  includeInjuries?json(ESPN,base+'/injuries',TTL.team).catch(()=>null):Promise.resolve(null)
+  json(ESPN,base+'/schedule',TTL.team,forceRefresh).catch(()=>null),
+  includeInjuries?json(ESPN,base+'/injuries',TTL.team,forceRefresh).catch(()=>null):Promise.resolve(null)
  ]);
  const events=array(schedule?.events||schedule?.season?.events||schedule?.data?.events||schedule?.schedule?.events||schedule?.team?.events);
  const form=events.map(e=>resultForTeam(e,teamId)).filter(Boolean).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,5);
@@ -107,8 +107,8 @@ async function teamContext(league,teamId,includeInjuries=false){
  return {form,injuries,notice:!schedule?'Nie udało się pobrać terminarza drużyny.':form.length<3?'ESPN zwrócił terminarz, ale po odczytaniu wyników dostępnych jest tylko '+form.length+' zakończonych spotkań.':includeInjuries&&!injuryData?'Brak raportu kontuzji od dostawcy.':null};
  })();teamPromises.set(promiseKey,promise);try{return await promise;}finally{teamPromises.delete(promiseKey);}
 }
-async function enrichFixture(f){
- const [h,a]=await Promise.all([teamContext(f.leagueId,f.home.id),teamContext(f.leagueId,f.away.id)]);
+async function enrichFixture(f,forceRefresh=false){
+ const [h,a]=await Promise.all([teamContext(f.leagueId,f.home.id,false,forceRefresh),teamContext(f.leagueId,f.away.id,false,forceRefresh)]);
  return {...f,prediction:estimateProbabilities(h.form,a.form),preMatch:{home:h,away:a,notices:[h.notice,a.notice].filter(Boolean)}};
 }
 async function espnFixtures(day){
@@ -172,11 +172,11 @@ function eventsFromSummary(data){
   time:{elapsed:val(e.clock?.displayValue,e.clock?.value,e.time?.elapsed,'?')},team:{name:str(e.team?.displayName||e.team?.name)},
   player:{name:str(e.athletesInvolved?.[0]?.displayName||e.player?.displayName)}}));
 }
-async function espnBundle(id){
+async function espnBundle(id,forceRefresh=false){
  const match=/^espn:([a-z0-9._-]+):(\d+)$/.exec(id);
  if(!match||!LEAGUE_MAP.has(match[1]))throw new Error('Nieprawidłowy identyfikator meczu ESPN.');
  const [,league,event]=match;
- const d=await json(ESPN,'/apis/site/v2/sports/soccer/'+league+'/summary?event='+event,TTL.details);
+ const d=await json(ESPN,'/apis/site/v2/sports/soccer/'+league+'/summary?event='+event,TTL.details,forceRefresh);
  const header=d.header||{},competition=header.competitions?.[0]||{},raw={
   id:event,date:competition.date||header.date,
   competitions:[{...competition,competitors:detailTeams(d)}],
@@ -186,17 +186,17 @@ async function espnBundle(id){
  if(!mapped)throw new Error('ESPN nie zwrócił zespołów lub daty spotkania.');
  const statistics=statsFromBox(d),events=eventsFromSummary(d);
  const lineups=array(d.rosters).map(r=>({team:r.team,players:array(r.roster)}));
- const [homeContext,awayContext]=await Promise.all([teamContext(league,mapped.home.id,true),teamContext(league,mapped.away.id,true)]);
+ const [homeContext,awayContext]=await Promise.all([teamContext(league,mapped.home.id,true,forceRefresh),teamContext(league,mapped.away.id,true,forceRefresh)]);
  const prediction=estimateProbabilities(homeContext.form,awayContext.form);
  const injuryRecords=[...homeContext.injuries.map(x=>({...x,team:mapped.home.name})),...awayContext.injuries.map(x=>({...x,team:mapped.away.name}))];
  return {source:'ESPN',fixture:[{fixture:{status:{short:mapped.status,long:mapped.statusText}},goals:mapped.score,teams:{home:mapped.home,away:mapped.away}}],
   match:{...mapped,prediction,preMatch:{home:homeContext,away:awayContext,notices:[homeContext.notice,awayContext.notice].filter(Boolean)}},statistics,events,lineups,players:[],injuries:injuryRecords,predictions:prediction,live:mapped.status==='LIVE',
   refreshAfterSeconds:mapped.status==='LIVE'?30:null,attribution:{label:'ESPN',url:'https://www.espn.com/soccer/'}};
 }
-async function sportBundle(id){
+async function sportBundle(id,forceRefresh=false){
  const slug=id.slice('sportscore:'.length);
  if(!slug||slug.length>200)throw new Error('Nieprawidłowy identyfikator SportScore.');
- const d=await json(SPORT,'/api/widget/match/?sport=football&slug='+encodeURIComponent(slug),TTL.details);
+ const d=await json(SPORT,'/api/widget/match/?sport=football&slug='+encodeURIComponent(slug),TTL.details,forceRefresh);
  const raw=d.match||d.fixture||d.data?.match||d.data||d;
  const mapped=sportMatch({...raw,slug})||null;
  if(!mapped)throw new Error('SportScore nie zwrócił kompletnych szczegółów meczu.');
@@ -205,10 +205,10 @@ async function sportBundle(id){
   lineups:array(raw.lineups||d.lineups),players:[],injuries:[],predictions:null,live:mapped.status==='LIVE',
   attribution:{label:'Powered by SportScore',url:'https://sportscore.com/'}};
 }
-export async function getMatchBundle(id){
- const key=str(id).trim();
- if(key.startsWith('espn:'))return espnBundle(key);
- if(key.startsWith('sportscore:'))return sportBundle(key);
+export async function getMatchBundle(id,options={}){
+ const key=str(id).trim(),forceRefresh=options.forceRefresh===true;
+ if(key.startsWith('espn:'))return espnBundle(key,forceRefresh);
+ if(key.startsWith('sportscore:'))return sportBundle(key,forceRefresh);
  throw new Error('Nieznany identyfikator meczu. Odśwież terminarz.');
 }
 export async function getFixtureStats(id){

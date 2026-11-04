@@ -3,18 +3,22 @@ import {getManualStats} from './store.js';
 import {readCache,writeCache} from './cache.js';
 const ANALYSIS_CACHE_TTL=20*60;
 const systemPrompt='Jesteś analitykiem piłkarskim MatchMind AI. Analizuj wyłącznie dostarczone fakty. Uwzględniaj ostatnie 5 meczów, gole strzelone i stracone, punkty na mecz, czyste konta, mecze bez gola, BTTS, over 2.5, serię wyników, przewagę własnego boiska, statystyki sezonowe oraz potwierdzone absencje. Nie traktuj samych zwycięstw i porażek jako pełnej analizy. Nie wymyślaj danych ani składów. Oddziel fakty od szacunków, wskaż brakujące dane i czynniki ryzyka. Nie zawyżaj pewności. Pisz po polsku, czytelnie, z krótkimi nagłówkami i maksymalnie 300 słowami.';
+function summarizeWindow(form){
+ if(!form.length)return null;
+ const wins=form.filter(x=>x.result==='W').length,draws=form.filter(x=>x.result==='D').length,losses=form.filter(x=>x.result==='L').length;
+ const goalsFor=form.reduce((n,x)=>n+(Number(x.gf)||0),0),goalsAgainst=form.reduce((n,x)=>n+(Number(x.ga)||0),0);
+ const points=wins*3+draws,matches=form.length;
+ return {matches,wins,draws,losses,points,pointsPerMatch:Number((points/matches).toFixed(2)),goalsFor,goalsAgainst,goalsForPerMatch:Number((goalsFor/matches).toFixed(2)),goalsAgainstPerMatch:Number((goalsAgainst/matches).toFixed(2)),cleanSheets:form.filter(x=>Number(x.ga)===0).length,failedToScore:form.filter(x=>Number(x.gf)===0).length,btts:form.filter(x=>Number(x.gf)>0&&Number(x.ga)>0).length,over25:form.filter(x=>(Number(x.gf)+Number(x.ga))>=3).length,goalDifference:goalsFor-goalsAgainst};
+}
 function summarizeForm(form){
  if(!Array.isArray(form)||!form.length)return null;
- const wins=form.filter(x=>x.result==='W').length,draws=form.filter(x=>x.result==='D').length,losses=form.filter(x=>x.result==='L').length;
- const scored=form.reduce((n,x)=>n+(Number(x.gf)||0),0),conceded=form.reduce((n,x)=>n+(Number(x.ga)||0),0);
- const cleanSheets=form.filter(x=>Number(x.ga)===0).length,failedToScore=form.filter(x=>Number(x.gf)===0).length;
- const btts=form.filter(x=>Number(x.gf)>0&&Number(x.ga)>0).length,over25=form.filter(x=>(Number(x.gf)+Number(x.ga))>=3).length;
- const points=wins*3+draws;
- const lastThree=form.slice(0,3),previous=form.slice(3);
- const recentPoints=lastThree.reduce((n,x)=>n+(x.result==='W'?3:x.result==='D'?1:0),0);
- const previousPoints=previous.reduce((n,x)=>n+(x.result==='W'?3:x.result==='D'?1:0),0);
- let streak=0;for(const x of form){if(!streak)streak=x.result;else if(x.result===streak)streak+='';else break;}
- return {matches:form.length,wins,draws,losses,goalsFor:scored,goalsAgainst:conceded,points,pointsPerMatch:Number((points/form.length).toFixed(2)),goalsForPerMatch:Number((scored/form.length).toFixed(2)),goalsAgainstPerMatch:Number((conceded/form.length).toFixed(2)),cleanSheets,failedToScore,btts,over25,recentPoints,previousPoints,trend:lastThree.length&&previous.length?(recentPoints>previousPoints?'poprawa':recentPoints<previousPoints?'pogorszenie':'stabilna'): 'za mała próbka'};
+ const last5=summarizeWindow(form.slice(0,5)),last10=summarizeWindow(form.slice(0,10));
+ const previous5=form.slice(5,10),previousSummary=summarizeWindow(previous5);
+ const streakResult=form[0]?.result;let streak=0;for(const x of form){if(x.result!==streakResult)break;streak++;}
+ const trendDelta=last5&&previousSummary?Number((last5.pointsPerMatch-previousSummary.pointsPerMatch).toFixed(2)):null;
+ const trend=trendDelta===null?'brak porównywalnej próbki':trendDelta>=0.6?'wyraźna poprawa':trendDelta>=0.2?'lekka poprawa':trendDelta<=-0.6?'wyraźne pogorszenie':trendDelta<=-0.2?'lekkie pogorszenie':'stabilna forma';
+ const venue=type=>summarizeWindow(form.filter(x=>x.venue===type));
+ return {...last10,record:last10.wins+'W · '+last10.draws+'R · '+last10.losses+'P',last5,last10,previous5:previousSummary,trend,trendDelta,streak:{result:streakResult||null,matches:streak},home:venue('dom'),away:venue('wyjazd')};
 }
 function readableSeasonStats(statistics,homeName,awayName){
  if(!Array.isArray(statistics)||!statistics.length)return [];
@@ -42,6 +46,9 @@ function deterministicSummary(evidence){
   const t=compact.teams[side],f=t.form,s=t.summary;
   if(s){
    parts.push(t.label+' — ostatnie '+s.matches+' meczów: '+s.wins+' zwycięstw, '+s.draws+' remisów, '+s.losses+' porażek; punkty/mecz '+s.pointsPerMatch+'; gole '+s.goalsFor+':'+s.goalsAgainst+' (średnio '+s.goalsForPerMatch+' strzelone i '+s.goalsAgainstPerMatch+' stracone na mecz).');
+    if(s.last5&&s.last10)parts.push(t.label+' — forma 5/10: ostatnie 5: '+s.last5.pointsPerMatch+' pkt/mecz, bilans '+s.last5.goalsFor+':'+s.last5.goalsAgainst+'; ostatnie 10: '+s.last10.pointsPerMatch+' pkt/mecz, bilans '+s.last10.goalsFor+':'+s.last10.goalsAgainst+'. Trend względem poprzednich 5: '+s.trend+' ('+s.trendDelta+' pkt/mecz).');
+    if(s.streak?.matches)parts.push(t.label+' — seria: '+s.streak.matches+' kolejnych '+({W:'zwycięstw',D:'remisów',L:'porażek'}[s.streak.result]||'wyników')+'.');
+    if(s.home||s.away)parts.push(t.label+' — rozdział lokalizacji: u siebie '+(s.home?s.home.pointsPerMatch+' pkt/mecz, gole '+s.home.goalsFor+':'+s.home.goalsAgainst:'brak próbki')+'; na wyjeździe '+(s.away?s.away.pointsPerMatch+' pkt/mecz, gole '+s.away.goalsFor+':'+s.away.goalsAgainst:'brak próbki')+'.');
    parts.push(t.label+' — dodatkowe wskaźniki: czyste konta '+s.cleanSheets+'/'+s.matches+', bez zdobytej bramki '+s.failedToScore+'/'+s.matches+', obie drużyny strzelały '+s.btts+'/'+s.matches+', over 2.5 gola '+s.over25+'/'+s.matches+'. Trend punktowy ostatnich 3 spotkań: '+s.trend+'.');
    if(f.length)parts.push(t.label+' — wyniki chronologicznie od najnowszego: '+f.map(x=>x.result+' '+x.goalsFor+':'+x.goalsAgainst+' vs '+x.opponent+(x.venue?' ('+x.venue+')':'')).join('; ')+'.');
   }else parts.push(t.label+': brak wystarczającej historii wyników.');
@@ -100,12 +107,12 @@ function buildQuickReadout(compact){
   if(home.goalsForPerMatch>away.goalsForPerMatch)rationale.push('Gospodarze strzelali średnio więcej goli ('+home.goalsForPerMatch+' vs '+away.goalsForPerMatch+').');
   else if(away.goalsForPerMatch>home.goalsForPerMatch)rationale.push('Goście strzelali średnio więcej goli ('+away.goalsForPerMatch+' vs '+home.goalsForPerMatch+').');
  }
- const stats=side=>side?{matches:side.matches,record:side.wins+'W · '+side.draws+'R · '+side.losses+'P',pointsPerMatch:side.pointsPerMatch,goals:side.goalsFor+':'+side.goalsAgainst,goalsForPerMatch:side.goalsForPerMatch,goalsAgainstPerMatch:side.goalsAgainstPerMatch,cleanSheets:side.cleanSheets,failedToScore:side.failedToScore,btts:side.btts,over25:side.over25,trend:side.trend}:null;
+ const stats=side=>side?{matches:side.matches,record:side.record,pointsPerMatch:side.pointsPerMatch,goals:side.goalsFor+':'+side.goalsAgainst,goalsForPerMatch:side.goalsForPerMatch,goalsAgainstPerMatch:side.goalsAgainstPerMatch,cleanSheets:side.cleanSheets,failedToScore:side.failedToScore,btts:side.btts,over25:side.over25,trend:side.trend,trendDelta:side.trendDelta,last5:side.last5,last10:side.last10,previous5:side.previous5,streak:side.streak,home:side.home,away:side.away}:null;
  return {pick,probabilities:p?{home:p.home,draw:p.draw,away:p.away}:null,confidence:p?.confidence||'brak modelu',sampleHome:p?.sampleHome||home?.matches||0,sampleAway:p?.sampleAway||away?.matches||0,home:stats(home),away:stats(away),rationale,warning:!home||!away||home.matches<3||away.matches<3?'Próbka danych jest ograniczona. Nie traktuj tego jako pewnego typu.':'Wskazanie statystyczne, nie gwarancja wyniku.'};
 }
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b',forceRefresh=extra.forceRefresh===true;
- const cacheKey='analysis:v8:'+String(matchId)+':'+model;
+ const cacheKey='analysis:v9:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(!forceRefresh&&cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  let match,providerNotice=null;

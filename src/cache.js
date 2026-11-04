@@ -19,4 +19,4 @@ export async function writeCache(key,data,ttlSeconds){
  const expires=Date.now()+ttlSeconds*1000;memory.set(key,{data,expires});
  if(dbReady){try{await pool.query('INSERT INTO api_cache(cache_key,payload,expires_at,updated_at) VALUES($1,$2,$3,now()) ON CONFLICT(cache_key) DO UPDATE SET payload=EXCLUDED.payload,expires_at=EXCLUDED.expires_at,updated_at=now()',[key,JSON.stringify(data),new Date(expires)]);}catch(e){console.error('Cache write:',e.message);}}
 }
-export function cacheInfo(){return {storage:dbReady?'PostgreSQL + memory':'memory fallback',persistent:dbReady};}
+export function cacheInfo(){return {storage:dbReady?'PostgreSQL + memory':'memory fallback',persistent:dbReady,cacheEntries:memory.size};}

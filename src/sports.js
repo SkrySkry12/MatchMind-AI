@@ -39,7 +39,12 @@ export async function getFixtures(date){
 export async function getFixtureStats(id){const data=await api('/fixtures/statistics?fixture='+encodeURIComponent(id),{ttl:TTL.statistics});return {source:'API-FOOTBALL',stats:data.response||[]};}
 export async function getMatchBundle(id){
  const q='?fixture='+encodeURIComponent(id);
- const endpoints=[['fixture','/fixtures'+q,TTL.fixtures],['statistics','/fixtures/statistics'+q,TTL.statistics],['events','/fixtures/events'+q,TTL.events],['lineups','/fixtures/lineups'+q,TTL.lineups],['players','/fixtures/players'+q,TTL.players],['injuries','/injuries'+q,TTL.injuries],['predictions','/predictions'+q,TTL.predictions]];
+ const fixtureData=await api('/fixtures'+q,{ttl:60});
+ const fixture=fixtureData.response||[];
+ const status=fixture[0]?.fixture?.status?.short||'NS';
+ const live=['1H','HT','2H','ET','BT','P','LIVE'].includes(status);
+ const refreshTTL=live?25:status==='NS'||status==='TBD'?900:3600;
+ const endpoints=[['statistics','/fixtures/statistics'+q,live?25:status==='NS'||status==='TBD'?300:3600],['events','/fixtures/events'+q,live?20:status==='NS'||status==='TBD'?300:3600],['lineups','/fixtures/lineups'+q,live?60:1800],['players','/fixtures/players'+q,live?60:1800],['injuries','/injuries'+q,14400],['predictions','/predictions'+q,86400]];
  const entries=await Promise.all(endpoints.map(async([name,path,ttl])=>{try{const r=await api(path,{ttl});return [name,r?.response??[]];}catch(error){return [name,{unavailable:true,reason:error.message}];}}));
- return {source:'API-FOOTBALL',...Object.fromEntries(entries)};
+ return {source:'API-FOOTBALL',fixture,...Object.fromEntries(entries),live,refreshAfterSeconds:live?25:null};
 }

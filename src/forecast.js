@@ -15,7 +15,7 @@ function scoreForecast(prediction,home,away){
   pickHit=['home','draw','away'][normalized.indexOf(Math.max(...normalized))]===actual;
  }
  const totalGoals=home+away,expected=prediction.expectedGoals;
- return {actual,pickHit,brier,logLoss,over25Hit:Number.isFinite(Number(prediction.over25))?((Number(prediction.over25)>=50)===(totalGoals>=3)):null,bttsHit:Number.isFinite(Number(prediction.btts))?((Number(prediction.btts)>=50)===(home>0&&away>0)):null,goalsMae:expected&&Number.isFinite(expected.home)&&Number.isFinite(expected.away)?Number(((Math.abs(expected.home-home)+Math.abs(expected.away-away))/2).toFixed(3)):null};
+ return {actual,pickHit,brier,logLoss,over25Hit:prediction.over25!=null&&Number.isFinite(Number(prediction.over25))?((Number(prediction.over25)>=50)===(totalGoals>=3)):null,bttsHit:prediction.btts!=null&&Number.isFinite(Number(prediction.btts))?((Number(prediction.btts)>=50)===(home>0&&away>0)):null,goalsMae:expected&&Number.isFinite(expected.home)&&Number.isFinite(expected.away)?Number(((Math.abs(expected.home-home)+Math.abs(expected.away-away))/2).toFixed(3)):null};
 }
 export async function collectForecastMetrics(){
  const rows=await listForecasts(500);

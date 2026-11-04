@@ -227,10 +227,13 @@ async function espnBundle(id,forceRefresh=false){
  const statistics=statsFromBox(d),events=eventsFromSummary(d);
  let lineups=espnRosterGroups(d,mapped.home.name,mapped.away.name),squadKind=lineups.some(g=>g.kind==='lineup')?'lineup':lineups.length?'roster':null;
  const [homeContext,awayContext]=await Promise.all([teamContext(league,mapped.home.id,true,forceRefresh),teamContext(league,mapped.away.id,true,forceRefresh)]);
- if(!lineups.length){
+ if(lineups.length<2){
   const rosters=await Promise.all([teamRoster(league,mapped.home.id,forceRefresh).catch(()=>[]),teamRoster(league,mapped.away.id,forceRefresh).catch(()=>[])]);
-  lineups=[{team:mapped.home.name,players:rosters[0],kind:'roster'},{team:mapped.away.name,players:rosters[1],kind:'roster'}].filter(g=>g.players.length);
-  if(lineups.length)squadKind='roster';
+  for(const [index,teamName] of [mapped.home.name,mapped.away.name].entries()){
+   if(lineups.some(g=>String(g.team||'').toLowerCase()===teamName.toLowerCase()))continue;
+   if(rosters[index].length)lineups.push({team:teamName,players:rosters[index],kind:'roster'});
+  }
+  if(lineups.length)squadKind=lineups.some(g=>g.kind==='lineup')?'lineup':'roster';
  }
  const injuries=[...homeContext.injuries.map(x=>({...x,team:mapped.home.name})),...awayContext.injuries.map(x=>({...x,team:mapped.away.name}))];
  const prediction=estimateProbabilities(homeContext.form,awayContext.form);

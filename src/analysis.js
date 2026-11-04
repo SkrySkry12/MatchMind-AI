@@ -40,11 +40,12 @@ function deterministicSummary(evidence){
 }
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b';
- const cacheKey='analysis:v4:'+String(matchId)+':'+model;
+ const forceRefresh=extra.forceRefresh===true;
+ const cacheKey='analysis:v5:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
- if(cached&&cached.expires>Date.now())return {...cached.data,cached:true};
+ if(!forceRefresh&&cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  let match,providerNotice=null;
- try{match=await getMatchBundle(matchId);}catch(error){
+ try{match=await getMatchBundle(matchId,{forceRefresh});}catch(error){
   if(!extra.fixture)throw error;
   providerNotice='SportScore nie udostępnił szczegółów tego meczu ('+error.message+'). Raport wykorzystuje wyłącznie dane terminarza.';
   const f=extra.fixture;

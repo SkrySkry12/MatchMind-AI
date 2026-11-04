@@ -56,6 +56,17 @@ function deterministicSummary(evidence){
  if(!parts.length)parts.push('Brak wystarczających danych do rzetelnej analizy.');
  return parts.join('\n\n')+'\n\nWniosek: dane są niepełne, więc nie należy podawać wysokiej pewności. To analiza statystyczna, nie gwarancja wyniku.';
 }
+async function askAbacusAI(compact){
+ const apiKey=process.env.ABACUS_API_KEY;
+ if(!apiKey)throw new Error('Brak ABACUS_API_KEY — Abacus.AI nie jest skonfigurowany.');
+ const base=(process.env.ABACUS_BASE_URL||'https://routellm.abacus.ai/v1').replace(/\/$/,'');
+ const model=process.env.ABACUS_MODEL||'route-llm';
+ const response=await fetch(base+'/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+apiKey,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:systemPrompt},{role:'user',content:'Przygotuj zwięzłe podsumowanie meczu w sekcjach: forma i skuteczność, statystyki dodatkowe, absencje i skład, ocena ryzyka. Nie wymyślaj brakujących danych. Nie podawaj rekomendacji jako pewnego typu. Dane wejściowe:\n'+JSON.stringify(compact)}],temperature:0.15,max_tokens:500}),signal:AbortSignal.timeout(Number(process.env.ABACUS_TIMEOUT_MS||45000))});
+ if(!response.ok){const detail=await response.text().catch(()=> '');throw new Error('Abacus.AI HTTP '+response.status+(detail?' — '+detail.slice(0,250):''));}
+ const data=await response.json(),answer=data.choices?.[0]?.message?.content?.trim();
+ if(!answer)throw new Error('Abacus.AI nie zwrócił raportu.');
+ return {answer,model:data.model||model};
+}
 async function askLocalLLM(compact){
  if(process.env.LLM_ENABLED!=='true')throw new Error('Lokalny model AI jest wyłączony.');
  const base=(process.env.OLLAMA_BASE_URL||'http://ollama:11434').replace(/\/$/,'');
@@ -94,7 +105,7 @@ function buildQuickReadout(compact){
 }
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b',forceRefresh=extra.forceRefresh===true;
- const cacheKey='analysis:v7:'+String(matchId)+':'+model;
+ const cacheKey='analysis:v8:'+String(matchId)+':'+model;
  const cached=await readCache(cacheKey);
  if(!forceRefresh&&cached&&cached.expires>Date.now())return {...cached.data,cached:true};
  let match,providerNotice=null;
@@ -105,10 +116,21 @@ export async function analyzeMatch(matchId,extra={}){
  }
  const manual=await getManualStats(matchId),evidence={match,manual};
  const compact=compactEvidence(evidence);
- let report,mode='statistics-only',llmNotice=providerNotice;
- try{report=await askLocalLLM(compact);mode='local-llm';}
- catch(error){report=deterministicSummary(evidence);llmNotice=[providerNotice,'Model AI niedostępny: '+error.message+'. Wyświetlono analizę statystyczną.'].filter(Boolean).join(' ');}
- const result={mode,provider:mode==='local-llm'?'Ollama':null,model:mode==='local-llm'?model:null,report,quick:buildQuickReadout(compact),llmNotice,cached:false};
- if(mode==='local-llm')await writeCache(cacheKey,result,ANALYSIS_CACHE_TTL);
+ let report,mode='statistics-only',provider=null,usedModel=null,llmNotice=providerNotice;
+ if(process.env.ABACUS_API_KEY){
+  try{const abacus=await askAbacusAI(compact);report=abacus.answer;mode='abacus-ai';provider='Abacus.AI';usedModel=abacus.model;}
+  catch(error){
+   llmNotice=[providerNotice,'Abacus.AI niedostępny: '+error.message].filter(Boolean).join(' ');
+   if(process.env.LLM_ENABLED==='true'){
+    try{report=await askLocalLLM(compact);mode='local-llm';provider='Ollama';usedModel=model;}
+    catch(localError){report=deterministicSummary(evidence);llmNotice+='; Ollama niedostępny: '+localError.message+'. Wyświetlono analizę statystyczną.';}
+   }else report=deterministicSummary(evidence);
+  }
+ }else if(process.env.LLM_ENABLED==='true'){
+  try{report=await askLocalLLM(compact);mode='local-llm';provider='Ollama';usedModel=model;}
+  catch(error){report=deterministicSummary(evidence);llmNotice=[providerNotice,'Model lokalny niedostępny: '+error.message+'. Wyświetlono analizę statystyczną.'].filter(Boolean).join(' ');}
+ }else report=deterministicSummary(evidence);
+ const result={mode,provider,model:usedModel,report,quick:buildQuickReadout(compact),llmNotice,cached:false};
+ if(mode!=='statistics-only')await writeCache(cacheKey,result,ANALYSIS_CACHE_TTL);
  return result;
 }

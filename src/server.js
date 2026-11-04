@@ -1,0 +1,11 @@
+import 'dotenv/config';
+import express from 'express'; import helmet from 'helmet'; import cors from 'cors'; import path from 'node:path'; import {fileURLToPath} from 'node:url';
+import {getFixtures,getFixtureStats} from './sports.js'; import {analyzeMatch} from './analysis.js'; import {saveManualStats,getManualStats} from './store.js';
+const app=express(),port=Number(process.env.PORT||4000),root=path.dirname(fileURLToPath(import.meta.url));
+app.use(helmet({contentSecurityPolicy:false}));app.use(cors());app.use(express.json({limit:'100kb'}));app.use(express.static(path.join(root,'../public')));
+app.get('/api/health',(_q,s)=>s.json({ok:true,app:'MatchMind AI'}));
+app.get('/api/fixtures',async(q,s)=>{try{s.json(await getFixtures(q.query.date));}catch(e){s.status(502).json({error:e.message});}});
+app.get('/api/matches/:id/stats',async(q,s)=>{try{const [provider,manual]=await Promise.all([getFixtureStats(q.params.id),getManualStats(q.params.id)]);s.json({...provider,manual});}catch(e){s.status(502).json({error:e.message});}});
+app.post('/api/matches/:id/manual-stats',async(q,s)=>{try{const p=q.body||{};if(!p.team||!Number.isInteger(Number(p.sampleSize))||Number(p.sampleSize)<1)return s.status(400).json({error:'Podaj nazwę drużyny i wielkość próbki.'});s.status(201).json(await saveManualStats(q.params.id,p));}catch(e){s.status(400).json({error:e.message});}});
+app.post('/api/matches/:id/analyze',async(q,s)=>{try{s.json(await analyzeMatch(q.params.id,q.body||{}));}catch(e){s.status(502).json({error:e.message});}});
+app.get('*',(_q,s)=>s.sendFile(path.join(root,'../public/index.html')));app.listen(port,()=>console.log('MatchMind AI on '+port));

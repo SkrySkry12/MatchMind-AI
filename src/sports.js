@@ -29,7 +29,7 @@ function mapMatch(x){
  const date=first(x.date,x.start_time,x.kickoff,x.datetime,x.time,null);
  const comp=x.competition||x.league||x.tournament||{};
  const slug=first(x.slug,x.match_slug,x.url_slug,x.id,x.match_id);
- const id=String(first(x.id,x.match_id,slug,''));
+ const id=String(first(x.slug,x.match_slug,x.url_slug,x.id,x.match_id,''));
  return {
   id,slug:String(slug||id),date:date?new Date(date).toISOString():new Date().toISOString(),
   league:first(comp.name,comp.title,x.competition_name,x.league_name,'Pozostałe rozgrywki'),

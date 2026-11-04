@@ -243,7 +243,17 @@ async function sportBundle(id,forceRefresh=false){
 }
 export async function getMatchBundle(id,options={}){
  const key=str(id).trim(),forceRefresh=options.forceRefresh===true;
- if(key.startsWith('espn:'))return espnBundle(key,forceRefresh);
+ if(key.startsWith('espn:')){
+  const bundle=await espnBundle(key,forceRefresh);
+  const slug=str(options.sportScoreSlug);
+  if(slug){
+   try{
+    const squad=await sportBundle('sportscore:'+slug,forceRefresh);
+    return {...bundle,squadSource:'SportScore',sportScoreLineups:squad.lineups,sportScoreInjuries:squad.injuries};
+   }catch(error){console.warn('SportScore squad details unavailable:',error.message);}
+  }
+  return bundle;
+ }
  if(key.startsWith('sportscore:'))return sportBundle(key,forceRefresh);
  throw new Error('Nieznany identyfikator meczu. Odśwież terminarz.');
 }

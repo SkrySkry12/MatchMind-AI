@@ -66,7 +66,7 @@ function couponMatchHtml(r,i){
  if(g?.available){candidates.push({market:'Over 1.5 gola',probability:Number(g.over15)},{market:'Over 2.5 gola',probability:Number(g.over25)},{market:'Over 3.5 gola',probability:Number(g.over35)},{market:'Obie drużyny strzelą (BTTS)',probability:Number(g.btts)});}
  const filtered=candidates.filter(x=>r.market==='goals'?/Over|BTTS/.test(x.market):r.market==='result'?/· Zwycięstwo|· Remis/.test(x.market):true).sort((a,b)=>b.probability-a.probability);
  const threshold=r.profile==='low'?72:r.profile==='high'?48:60;
- const best=filtered[0],recommendation=r.custom?'<div class="coupon-recommendation"><small>TYP Z TWOJEGO KUPONU</small><strong>'+safe(r.custom.market)+'</strong><span>'+(r.custom.odds?'Kurs wpisany przez Ciebie: '+safe(r.custom.odds):'Nie podano kursu')+'</span></div>':best&&best.probability>=threshold?'<div class="coupon-recommendation"><small>PROPOZYCJA STATYSTYCZNA · PRÓG '+threshold+'%</small><strong>'+safe(best.market)+'</strong><span>Szacowane prawdopodobieństwo: '+best.probability.toFixed(1)+'%</span><label>Kurs u Twojego bukmachera (opcjonalnie)<input class="coupon-odds-input" type="number" min="1.01" step="0.01" inputmode="decimal" placeholder="np. 1.45"></label></div>':'<div class="coupon-recommendation cautious"><small>BRAK ODPOWIEDNIO MOCNEGO SYGNAŁU</small><strong>Nie dokładamy typu na siłę</strong><span>'+(best?'Najlepsza dostępna estymacja: '+best.market+' · '+best.probability.toFixed(1)+'%.':'Brak wystarczających danych dla wybranych rynków.')+'</span></div>';
+ const best=filtered[0],recommendation=r.autoPick?'<div class="coupon-recommendation"><small>AUTOMATYCZNIE WYBRANY TYP · '+safe(r.autoPick.probability.toFixed(1))+'%</small><strong>'+safe(r.autoPick.market)+'</strong><span>'+safe(r.autoPick.reason)+'</span><label>Kurs u Twojego bukmachera (opcjonalnie)<input class="coupon-odds-input" type="number" min="1.01" step="0.01" inputmode="decimal" placeholder="np. 1.45"></label></div>':r.custom?'<div class="coupon-recommendation"><small>TYP Z TWOJEGO KUPONU</small><strong>'+safe(r.custom.market)+'</strong><span>'+(r.custom.odds?'Kurs wpisany przez Ciebie: '+safe(r.custom.odds):'Nie podano kursu')+'</span></div>':best&&best.probability>=threshold?'<div class="coupon-recommendation"><small>PROPOZYCJA STATYSTYCZNA · PRÓG '+threshold+'%</small><strong>'+safe(best.market)+'</strong><span>Szacowane prawdopodobieństwo: '+best.probability.toFixed(1)+'%</span><label>Kurs u Twojego bukmachera (opcjonalnie)<input class="coupon-odds-input" type="number" min="1.01" step="0.01" inputmode="decimal" placeholder="np. 1.45"></label></div>':'<div class="coupon-recommendation cautious"><small>BRAK ODPOWIEDNIO MOCNEGO SYGNAŁU</small><strong>Nie dokładamy typu na siłę</strong><span>'+(best?'Najlepsza dostępna estymacja: '+best.market+' · '+best.probability.toFixed(1)+'%.':'Brak wystarczających danych dla wybranych rynków.')+'</span></div>';
  const goalsHtml=g?.available?'<div class="mm-goals"><div class="mm-goals-head"><strong>Przewidywana liczba goli</strong><span>Model Poissona</span></div><div class="mm-goals-lambdas"><div><small>'+safe(r.m.home?.name||'Gospodarze')+'</small><b>'+g.lambdaHome.toFixed(2)+'</b><small>oczekiwane gole</small></div><div class="mm-goals-total"><small>Łącznie</small><b>'+g.lambdaTotal.toFixed(2)+'</b><small>gola</small></div><div><small>'+safe(r.m.away?.name||'Goście')+'</small><b>'+g.lambdaAway.toFixed(2)+'</b><small>oczekiwane gole</small></div></div><div class="mm-goals-markets"><span>Over 1.5 <b>'+g.over15+'%</b></span><span>Over 2.5 <b>'+g.over25+'%</b></span><span>Over 3.5 <b>'+g.over35+'%</b></span><span>Obie strzelą <b>'+g.btts+'%</b></span></div><p>Najbardziej prawdopodobny wynik: <b>'+g.mostLikelyScore+'</b> ('+g.scoreProbability+'%)</p><small>Próba: '+g.sampleHome+' / '+g.sampleAway+' meczów. '+safe(g.method)+'.</small></div>':'<div class="mm-goals mm-goals-missing">Szacowanie goli niedostępne: '+safe(g?.reason||'brak wystarczających danych')+'</div>';
  return '<article class="mm-pick">'+name+providerBadge(r.data)+'<div class="mm-risk '+riskClass+'"><strong>Ryzyko: '+risk+'</strong><span>'+riskReason+'</span></div>'+recommendation+pick+probs+goalsHtml+'<div class="mm-compare-title">Porównanie statystyk</div><div class="mm-quick-grid">'+quickStatsHtml(r.m.home?.name||'Gospodarze',q.home)+quickStatsHtml(r.m.away?.name||'Goście',q.away)+'</div><p class="mm-warning">'+safe(q.warning)+'</p></article>';
 }
@@ -114,27 +114,75 @@ function addBuilder(){
   $('coupon-generate-panel').hidden=consult;$('coupon-consult-panel').hidden=!consult;$('coupon-builder-result').hidden=true;
  });
  const out=$('coupon-builder-result');
+ async function analyzeFixtures(matches){
+  const results=[];
+  for(let i=0;i<matches.length;i+=3){
+   const batch=matches.slice(i,i+3);
+   const part=await Promise.all(batch.map(async m=>{
+    try{
+     const response=await fetch('/api/coupons/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixture:m,forceRefresh:false}),signal:AbortSignal.timeout(55000)});
+     const data=await response.json();if(!response.ok)throw new Error(data.error||'Błąd analizy');return {m,data};
+    }catch(error){return {m,error:error?.message||'Nieznany błąd'};}
+   }));
+   results.push(...part);
+  }
+  return results;
+ }
+ function selectAutomaticCoupon(results,profile,market,count){
+  const threshold=profile==='low'?72:profile==='high'?48:60;
+  const options=[];
+  for(const result of results){
+   const q=result.data?.quick;if(!q)continue;
+   const sample=Math.min(Number(q.home?.matches)||0,Number(q.away?.matches)||0);
+   if(sample<3)continue;
+   const candidates=[];
+   const p=q.probabilities;
+   if(p&&market!=='goals')candidates.push({market:'1 · Zwycięstwo gospodarzy',probability:Number(p.home)},{market:'X · Remis',probability:Number(p.draw)},{market:'2 · Zwycięstwo gości',probability:Number(p.away)});
+   const g=q.goals;
+   if(g?.available&&market!=='result')candidates.push({market:'Over 1.5 gola',probability:Number(g.over15)},{market:'Over 2.5 gola',probability:Number(g.over25)},{market:'Over 3.5 gola',probability:Number(g.over35)},{market:'Obie drużyny strzelą (BTTS)',probability:Number(g.btts)});
+   const valid=candidates.filter(x=>Number.isFinite(x.probability)&&x.probability>=threshold).sort((a,b)=>b.probability-a.probability);
+   if(!valid.length)continue;
+   const best=valid[0],penalty=Math.max(0,5-sample)*2.5;
+   const rationale=(q.rationale||[]).slice(0,2).join(' ')||'Wybór oparty na dostępnych prawdopodobieństwach modelu.';
+   options.push({...result,autoPick:{...best,score:best.probability-penalty,sample,reason:rationale+' Próba: '+sample+' meczów każdej drużyny.'}});
+  }
+  options.sort((a,b)=>b.autoPick.score-a.autoPick.score);
+  const chosen=[],used=new Set();
+  for(const option of options){if(used.has(String(option.m.id)))continue;chosen.push(option);used.add(String(option.m.id));if(chosen.length>=count)break;}
+  return {chosen,threshold,eligible:options.length};
+ }
+ async function renderResults(results,{customLines=[],auto=false,profile='balanced',market='all',count=3}={}){
+  const annotated=auto?results.map((r,i)=>({...r,profile,market,autoPick:r.autoPick})):results.map((r,i)=>({...r,custom:customLines[i]||null,profile,market}));
+  out.innerHTML='<div class="coupon-result-head"><div><p class="eyebrow">MATCHMIND ANALYSIS</p><h3>'+(customLines.length?'Ocena Twojego kuponu':auto?'Automatycznie dobrany kupon':'Propozycja MatchMind AI')+'</h3></div><span>'+results.length+' zdarzeń</span></div>'+(auto?'<div class="coupon-auto-summary"><strong>Dobór automatyczny</strong><p>Przeanalizowano '+auto.scanned+' spotkań. Próg profilu: '+auto.threshold+'%. Wybrano '+results.length+' z '+count+' żądanych pozycji. Każde zdarzenie pochodzi z osobnego meczu.</p><p>'+ (results.length?'MatchMind uporządkował kandydatów według prawdopodobieństwa, z korektą za małą próbkę danych.':'Nie znaleziono wystarczająco mocnych typów — generator nie obniżył progu, żeby sztucznie zapełnić kupon.')+'</p></div>':'')+annotated.map((r,i)=>couponMatchHtml(r,i)).join('')+(auto&&results.length?'<div class="coupon-auto-summary"><strong>Szacowana łączna szansa kuponu: '+auto.combined.toFixed(2)+'%</strong><p>To przybliżenie obliczone jako iloczyn prawdopodobieństw poszczególnych zdarzeń przy założeniu ich niezależności. Rzeczywista szansa może być inna; model nie uwzględnia wszystkich zależności.</p></div>':'')+'<div class="coupon-total-odds" id="coupon-total-odds">Łączny kurs: <strong>uzupełnij kursy</strong></div><p class="coupon-note">Kursy nie są pobierane automatycznie. Wprowadzone kursy są danymi użytkownika i nie są przez MatchMind weryfikowane.</p>';
+  const recalculateTotal=()=>{const entered=customLines.length?customLines.map(x=>Number(String(x.odds||'').replace(',','.'))):[...out.querySelectorAll('.coupon-odds-input')].map(x=>Number(String(x.value||'').replace(',','.')));const total=$('coupon-total-odds');if(!total)return;const valid=entered.length&&entered.every(x=>Number.isFinite(x)&&x>=1.01);total.innerHTML=valid?'Łączny kurs wpisanych zdarzeń: <strong>'+entered.reduce((a,b)=>a*b,1).toFixed(2).replace('.',',')+'</strong>':'Łączny kurs: <strong>uzupełnij wszystkie kursy (opcjonalnie)</strong>';};
+  out.querySelectorAll('.coupon-odds-input').forEach(input=>input.addEventListener('input',recalculateTotal));recalculateTotal();
+ }
  async function runCoupon(matches,customLines=[]){
   const button=customLines.length?$('coupon-consult'):$('coupon-generate');
   if(button.dataset.running==='1'||!matches.length)return;
   button.dataset.running='1';button.disabled=true;button.textContent='Analizuję kupon…';out.hidden=false;
   out.innerHTML='<h3>Analiza wybranych zdarzeń</h3><p class="muted">Sprawdzam dostępne dane dla '+matches.length+' spotkań.</p>';
   try{
-   const results=await Promise.all(matches.map(async m=>{
-    try{const response=await fetch('/api/coupons/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixture:m,forceRefresh:true}),signal:AbortSignal.timeout(55000)});const data=await response.json();if(!response.ok)throw new Error(data.error||'Błąd analizy');return {m,data};}
-    catch(error){return {m,error:error?.message||'Nieznany błąd'};}
-   }));
-   const profile=$('coupon-risk')?.value||'balanced',market=$('coupon-market')?.value||'all';
-   const annotated=results.map((r,i)=>({...r,custom:customLines[i]||null,profile,market}));
-   out.innerHTML='<div class="coupon-result-head"><div><p class="eyebrow">MATCHMIND ANALYSIS</p><h3>'+(customLines.length?'Ocena Twojego kuponu':'Propozycja MatchMind AI')+'</h3></div><span>'+results.length+' zdarzeń</span></div>'+annotated.map((r,i)=>couponMatchHtml(r,i)).join('')+'<div class="coupon-total-odds" id="coupon-total-odds">Łączny kurs: <strong>uzupełnij kursy</strong></div><p class="coupon-note">Kursy nie są pobierane automatycznie. Wprowadzone kursy są danymi użytkownika i nie są przez MatchMind weryfikowane.</p>';
-   const recalculateTotal=()=>{const entered=customLines.length?customLines.map(x=>Number(String(x.odds||'').replace(',','.'))):[...out.querySelectorAll('.coupon-odds-input')].map(x=>Number(String(x.value||'').replace(',','.')));const total=$('coupon-total-odds');if(!total)return;const valid=entered.length&&entered.every(x=>Number.isFinite(x)&&x>=1.01);total.innerHTML=valid?'Łączny kurs wpisanych zdarzeń: <strong>'+entered.reduce((a,b)=>a*b,1).toFixed(2).replace('.',',')+'</strong>':'Łączny kurs: <strong>uzupełnij wszystkie kursy (opcjonalnie)</strong>';};
-   out.querySelectorAll('.coupon-odds-input').forEach(input=>input.addEventListener('input',recalculateTotal));recalculateTotal();
+   const results=await analyzeFixtures(matches),profile=$('coupon-risk')?.value||'balanced',market=$('coupon-market')?.value||'all';
+   await renderResults(results,{customLines,profile,market});
   }catch(error){out.innerHTML='<p class="mm-warning">'+safe(error?.message||'Nie udało się przeanalizować kuponu.')+'</p>';}
   finally{button.dataset.running='0';button.disabled=false;button.textContent=customLines.length?'Przeanalizuj mój kupon →':'Utwórz propozycję ponownie →';}
  }
- $('coupon-generate')?.addEventListener('click',()=>{
-  const count=Number($('coupon-count').value)||3,chosen=allMatches.filter(m=>pickedMatches.has(String(m.id))).slice(0,count);
-  if(chosen.length)runCoupon(chosen);
+ $('coupon-generate')?.addEventListener('click',async()=>{
+  const button=$('coupon-generate');if(button.dataset.running==='1')return;
+  const automatic=$('coupon-auto-mode')?.checked,count=Number($('coupon-count').value)||3;
+  const chosen=automatic?allMatches.filter(m=>!['LIVE','FT','AET','PEN','CANCELLED','POSTPONED'].includes(String(m.status||'NS').toUpperCase())).slice(0,20):allMatches.filter(m=>pickedMatches.has(String(m.id))).slice(0,count);
+  if(!chosen.length){out.hidden=false;out.innerHTML='<p class="mm-warning">Brak spotkań do analizy w aktualnie załadowanym terminarzu.</p>';return;}
+  if(!automatic){runCoupon(chosen);return;}
+  button.dataset.running='1';button.disabled=true;button.textContent='Szukam najbezpieczniejszych typów…';out.hidden=false;
+  out.innerHTML='<h3>Automatyczny dobór kuponu</h3><p class="muted">Analizuję do '+chosen.length+' spotkań z terminarza. Nie musisz wybierać drużyn.</p>';
+  try{
+   const results=await analyzeFixtures(chosen),profile=$('coupon-risk')?.value||'balanced',market=$('coupon-market')?.value||'all',count=Number($('coupon-count').value)||3;
+   const selection=selectAutomaticCoupon(results,profile,market,count);
+   const combined=selection.chosen.reduce((value,item)=>value*(item.autoPick.probability/100),1)*100;
+   await renderResults(selection.chosen,{auto:{scanned:chosen.length,threshold:selection.threshold,combined},profile,market,count});
+  }catch(error){out.innerHTML='<p class="mm-warning">'+safe(error?.message||'Nie udało się automatycznie dobrać kuponu.')+'</p>';}
+  finally{button.dataset.running='0';button.disabled=false;button.textContent='Utwórz propozycję kuponu →';}
  });
  $('coupon-consult')?.addEventListener('click',()=>{
   const lines=$('coupon-own-slip').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),matches=[],custom=[],missing=[];

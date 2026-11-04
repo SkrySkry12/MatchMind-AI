@@ -124,7 +124,8 @@ function buildQuickReadout(compact){
   else if(away.goalsForPerMatch>home.goalsForPerMatch)rationale.push('Goście strzelali średnio więcej goli ('+away.goalsForPerMatch+' vs '+home.goalsForPerMatch+').');
  }
  const stats=side=>side?{matches:side.matches,record:side.record,pointsPerMatch:side.pointsPerMatch,goals:side.goalsFor+':'+side.goalsAgainst,goalsForPerMatch:side.goalsForPerMatch,goalsAgainstPerMatch:side.goalsAgainstPerMatch,cleanSheets:side.cleanSheets,failedToScore:side.failedToScore,btts:side.btts,over25:side.over25,trend:side.trend,trendDelta:side.trendDelta,last5:side.last5,last10:side.last10,previous5:side.previous5,streak:side.streak,home:side.home,away:side.away}:null;
- const goals=expectedGoalsModel(home,away);\n return {pick,probabilities:p?{home:p.home,draw:p.draw,away:p.away}:null,goals,confidence:p?.confidence||'brak modelu',sampleHome:p?.sampleHome||home?.matches||0,sampleAway:p?.sampleAway||away?.matches||0,home:stats(home),away:stats(away),rationale,warning:!home||!away||home.matches<3||away.matches<3?'Próbka danych jest ograniczona. Nie traktuj tego jako pewnego typu.':'Wskazanie statystyczne, nie gwarancja wyniku.'};
+ const goals=expectedGoalsModel(home,away);
+ return {pick,probabilities:p?{home:p.home,draw:p.draw,away:p.away}:null,goals,confidence:p?.confidence||'brak modelu',sampleHome:p?.sampleHome||home?.matches||0,sampleAway:p?.sampleAway||away?.matches||0,home:stats(home),away:stats(away),rationale,warning:!home||!away||home.matches<3||away.matches<3?'Próbka danych jest ograniczona. Nie traktuj tego jako pewnego typu.':'Wskazanie statystyczne, nie gwarancja wyniku.'};
 }
 export async function analyzeMatch(matchId,extra={}){
  const model=process.env.OLLAMA_MODEL||'qwen3:0.6b',forceRefresh=extra.forceRefresh===true;

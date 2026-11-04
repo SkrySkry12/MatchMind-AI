@@ -75,3 +75,18 @@ input{color-scheme:dark}
  .match-modal{padding:6px}
  .match-modal-card{width:100%;max-width:100%;padding:15px}
 }
+
+
+/* Compact coupon verdict and side-by-side clean statistics */
+.mm-quick-pick{margin:12px 0;padding:13px 14px;border:1px solid #34435c;border-radius:12px;background:#182338;display:grid;gap:5px}
+.mm-quick-pick small{font-size:9px;letter-spacing:.1em;color:#91b5ff;font-weight:800}
+.mm-quick-pick strong{font-size:16px;color:#f4f7ff}
+.mm-quick-pick>span{font-weight:800;color:#91b5ff}
+.mm-quick-pick p{margin:2px 0 0;color:#b8c3d6;font-size:11px;line-height:1.55}
+.mm-quick-probs{display:flex;flex-wrap:wrap;gap:8px;margin:9px 0}
+.mm-quick-probs span{padding:6px 9px;border-radius:8px;background:#202b3d;color:#dce6fa;font-size:11px;font-weight:700}
+.mm-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
+.mm-quick-team{min-width:0;padding:11px;border:1px solid #2c3749;border-radius:11px;background:#121a27;display:grid;gap:5px;color:#aeb9ca;font-size:10px;overflow-wrap:anywhere}
+.mm-quick-team>b{font-size:12px;color:#edf2fa}
+.mm-quick-team span b{color:#dce8ff}
+@media(max-width:520px){.mm-quick-grid{grid-template-columns:1fr}.mm-quick-pick strong{font-size:14px}}

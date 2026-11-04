@@ -6,7 +6,8 @@ app.use(helmet({contentSecurityPolicy:false}));app.use(cors());app.use(express.j
 app.get('/api/health',(_q,s)=>s.json({ok:true,app:'MatchMind AI',footballApi:getApiUsage(),llm:{provider:'Ollama',model:process.env.OLLAMA_MODEL||'qwen3:0.6b',enabled:process.env.LLM_ENABLED==='true'}}));
 app.get('/api/usage',(_q,s)=>s.json(getApiUsage()));
 app.get('/api/fixtures',async(q,s)=>{try{s.json(await getFixtures(q.query.date));}catch(e){s.status(502).json({error:e.message});}});
-app.get('/api/matches/:id/overview',async(q,s)=>{try{s.set('Cache-Control','no-store');s.json(await getMatchBundle(q.params.id));}catch(e){s.status(502).json({error:e.message});}});\napp.get('/api/matches/:id/stats',async(q,s)=>{try{const [provider,manual]=await Promise.all([getFixtureStats(q.params.id),getManualStats(q.params.id)]);s.json({...provider,manual});}catch(e){s.status(502).json({error:e.message});}});
+app.get('/api/matches/:id/overview',async(q,s)=>{try{s.set('Cache-Control','no-store');s.json(await getMatchBundle(q.params.id));}catch(e){s.status(502).json({error:e.message});}});
+app.get('/api/matches/:id/stats',async(q,s)=>{try{const [provider,manual]=await Promise.all([getFixtureStats(q.params.id),getManualStats(q.params.id)]);s.json({...provider,manual});}catch(e){s.status(502).json({error:e.message});}});
 app.post('/api/matches/:id/manual-stats',async(q,s)=>{try{const p=q.body||{};if(!p.team||!Number.isInteger(Number(p.sampleSize))||Number(p.sampleSize)<1)return s.status(400).json({error:'Podaj nazwę drużyny i wielkość próbki.'});s.status(201).json(await saveManualStats(q.params.id,p));}catch(e){s.status(400).json({error:e.message});}});
 app.post('/api/matches/:id/analyze',async(q,s)=>{try{s.json(await analyzeMatch(q.params.id,q.body||{}));}catch(e){s.status(502).json({error:e.message});}});
 app.get('*',(_q,s)=>s.sendFile(path.join(root,'../public/index.html')));

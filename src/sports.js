@@ -69,13 +69,16 @@ function resultForTeam(event,teamId){
 }
 function poisson(lambda,k){let p=Math.exp(-lambda);for(let i=1;i<=k;i++)p*=lambda/i;return p;}
 function estimateProbabilities(h,a){
- const avg=(xs,k,f)=>xs.length?xs.reduce((s,x)=>s+x[k],0)/xs.length:f;
- const hx=Math.max(.2,Math.min(3.8,(avg(h,'gf',1.3)+avg(a,'ga',1.3))/2+.18));
- const ax=Math.max(.2,Math.min(3.5,(avg(a,'gf',1.1)+avg(h,'ga',1.3))/2-.08));
+ // Nie generuj procentów z domyślnych średnich, jeśli historia nie jest dostępna.
+ // Minimum 3 zakończone mecze każdej drużyny ogranicza pozorne 50/50 bez danych.
+ if(h.length<3||a.length<3)return null;
+ const avg=(xs,k)=>xs.reduce((s,x)=>s+x[k],0)/xs.length;
+ const hx=Math.max(.2,Math.min(3.8,(avg(h,'gf')+avg(a,'ga'))/2+.18));
+ const ax=Math.max(.2,Math.min(3.5,(avg(a,'gf')+avg(h,'ga'))/2-.08));
  let home=0,draw=0,away=0;
  for(let x=0;x<=8;x++)for(let y=0;y<=8;y++){const p=poisson(hx,x)*poisson(ax,y);if(x>y)home+=p;else if(x===y)draw+=p;else away+=p;}
  const t=home+draw+away,n=Math.min(h.length,5)+Math.min(a.length,5);
- return {home:Math.round(home/t*100),draw:Math.round(draw/t*100),away:Math.round(away/t*100),source:'Model statystyczny MatchMind',confidence:n>=8?'średnia':n>=4?'niska':'bardzo niska',sampleHome:h.length,sampleAway:a.length,expectedGoals:{home:Number(hx.toFixed(2)),away:Number(ax.toFixed(2))}};
+ return {home:Math.round(home/t*100),draw:Math.round(draw/t*100),away:Math.round(away/t*100),source:'Model statystyczny MatchMind',confidence:n>=8?'średnia':'niska',sampleHome:h.length,sampleAway:a.length,expectedGoals:{home:Number(hx.toFixed(2)),away:Number(ax.toFixed(2))}};
 }
 const teamPromises=new Map();
 async function teamContext(league,teamId,includeInjuries=false){
@@ -93,7 +96,7 @@ async function teamContext(league,teamId,includeInjuries=false){
   name:x.athlete?.displayName||x.athlete?.fullName||x.displayName||x.name||'Zawodnik',
   status:x.status||x.type||x.details||'Status nieznany'
  })).slice(0,12);
- return {form,injuries,notice:!schedule?'Brak historii ostatnich spotkań.':includeInjuries&&!injuryData?'Brak raportu kontuzji od dostawcy.':null};
+ return {form,injuries,notice:!schedule?'Brak historii ostatnich spotkań.':form.length<3?'Za mało danych historycznych do wiarygodnego oszacowania (wymagane min. 3 mecze).':includeInjuries&&!injuryData?'Brak raportu kontuzji od dostawcy.':null};
  })();teamPromises.set(promiseKey,promise);try{return await promise;}finally{teamPromises.delete(promiseKey);}
 }
 async function enrichFixture(f){

@@ -1,6 +1,6 @@
 import {readCache,writeCache,cacheInfo} from './cache.js';
 const BASE=(process.env.FOOTBALL_API_BASE_URL||'https://v3.football.api-sports.io').replace(/\/$/,'');
-const TTL={fixtures:180,statistics:900,events:900,lineups:1800,players:1800,injuries:14400,predictions:86400};
+const TTL={fixtures:900,statistics:3600,events:1800,lineups:3600,players:3600,injuries:21600,predictions:86400};
 const demo=[{id:'demo-1',league:'Demo League',leagueId:0,season:2026,date:new Date().toISOString(),home:{name:'North City'},away:{name:'South United'},status:'NS',demo:true},{id:'demo-2',league:'Demo League',leagueId:0,season:2026,date:new Date(Date.now()+86400000).toISOString(),home:{name:'Royal FC'},away:{name:'Athletic Town'},status:'NS',demo:true}];
 const stats={requests:0,cacheHits:0,staleFallbacks:0,remaining:null,limit:null};
 async function api(path,{ttl=300}={}){

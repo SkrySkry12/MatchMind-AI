@@ -13,14 +13,16 @@ services:
       FOOTBALL_API_BASE_URL: ${FOOTBALL_API_BASE_URL:-https://v3.football.api-sports.io}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:0.6b}
-      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-120000}
-      LLM_ENABLED: ${LLM_ENABLED:-false}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-180000}
+      LLM_ENABLED: ${LLM_ENABLED:-true}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
-      DEMO_MODE: ${DEMO_MODE:-true}
+      DEMO_MODE: ${DEMO_MODE:-false}
     depends_on:
       db:
         condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     mem_limit: 512m
   db:
@@ -34,21 +36,37 @@ services:
     restart: unless-stopped
     mem_limit: 384m
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U matchmind -d matchmind"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 3s
       retries: 12
   ollama:
     image: ollama/ollama:latest
-    profiles: ["local-ai"]
     volumes:
       - ollama:/root/.ollama
     environment:
       OLLAMA_NUM_PARALLEL: "1"
       OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_KEEP_ALIVE: "5m"
+      OLLAMA_KEEP_ALIVE: "10m"
     restart: unless-stopped
     mem_limit: 1536m
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  ollama-init:
+    image: ollama/ollama:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull ${OLLAMA_MODEL:-qwen3:0.6b}"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 256m
 volumes:
   pgdata:
   ollama:

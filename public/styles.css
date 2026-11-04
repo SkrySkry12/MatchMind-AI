@@ -238,3 +238,16 @@ input{color-scheme:dark}
 .coupon-recommendation.cautious small{color:#f0d49c}
 .coupon-total-odds{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:12px;padding:12px;border:1px solid #38516f;border-radius:10px;background:#17283b;color:#b9cce5;font-size:11px}
 .coupon-total-odds strong{font-size:16px;color:#a8e6c7}
+
+/* Restored homepage quick multi-match analysis */
+.legacy-analysis{margin:17px 0 20px;padding:17px;border:1px solid #30415a;border-radius:15px;background:linear-gradient(145deg,#172436,#121b28);min-width:0}
+.legacy-analysis-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.legacy-analysis-head h3{font-size:17px;margin:3px 0 6px;color:#edf4ff}
+.legacy-analysis-head .muted{font-size:10px;line-height:1.55;max-width:600px;margin:0}
+.legacy-analysis-action{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.legacy-analysis-action span{font-size:10px;color:#a9c9f4;font-weight:800;white-space:nowrap}
+.legacy-analysis-action button{padding:10px 13px;border:1px solid #527eaf;border-radius:9px;background:#23466e;color:#f3f8ff;font-size:10px;font-weight:850;cursor:pointer}
+.legacy-analysis-action button:disabled{opacity:.45;cursor:not-allowed}
+#legacy-analysis-result{margin-top:15px;padding-top:13px;border-top:1px solid #2c3c52;min-width:0}
+#legacy-analysis-result>h3{font-size:15px;margin:0 0 10px;color:#eef4ff}
+@media(max-width:600px){.legacy-analysis{padding:13px}.legacy-analysis-head{align-items:flex-start;flex-direction:column}.legacy-analysis-action{width:100%;justify-content:space-between}.legacy-analysis-action button{flex:1}}

@@ -121,7 +121,7 @@ function addBuilder(){
    if(!match){missing.push(line);continue;}
    matches.push(match);custom.push({market:parts[1]||'Nie podano',odds:parts[2]||null});
   }
-  if(missing.length){out.hidden=false;out.innerHTML='<h3>Nie rozpoznano wszystkich pozycji</h3><p class="coupon-note">Popraw nazwy drużyn tak, aby odpowiadały terminarzowi:</p><ul>'+missing.map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';}
+  if(missing.length){out.hidden=false;out.innerHTML='<h3>Nie rozpoznano wszystkich pozycji</h3><p class="coupon-note">Popraw nazwy drużyn tak, aby odpowiadały terminarzowi:</p><ul>'+missing.map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';return;}
   if(matches.length)runCoupon(matches,custom);
   else if(!missing.length){out.hidden=false;out.innerHTML='<p class="coupon-note">Wpisz przynajmniej jedno zdarzenie w osobnym wierszu.</p>';}
  });

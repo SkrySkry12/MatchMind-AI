@@ -82,6 +82,29 @@ function updateCouponCount(){
  const count=pickedMatches.size;
  if($('coupon-picked-count'))$('coupon-picked-count').textContent=count+' wybranych';
  if($('coupon-generate'))$('coupon-generate').disabled=count===0;
+ if($('legacy-picked-count'))$('legacy-picked-count').textContent=count+' wybranych';
+ if($('legacy-analyze'))$('legacy-analyze').disabled=count===0;
+}
+function addLegacyAnalysis(){
+ const button=$('legacy-analyze'),out=$('legacy-analysis-result');
+ if(!button||button.dataset.bound==='1')return;
+ button.dataset.bound='1';
+ button.addEventListener('click',async()=>{
+  if(button.dataset.running==='1')return;
+  const chosen=allMatches.filter(m=>pickedMatches.has(String(m.id)));
+  if(!chosen.length)return;
+  button.dataset.running='1';button.disabled=true;button.textContent='Analizuję…';out.hidden=false;
+  out.innerHTML='<h3>Analiza zaznaczonych spotkań</h3><p class="muted">Oceniam '+chosen.length+' spotkań na podstawie danych dostępnych w MatchMind.</p>';
+  try{
+   const results=await Promise.all(chosen.map(async m=>{
+    try{const response=await fetch('/api/matches/'+encodeURIComponent(m.id)+'/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixture:m,forceRefresh:false}),signal:AbortSignal.timeout(55000)});const data=await response.json();if(!response.ok)throw new Error(data.error||'Błąd analizy');return {m,data};}
+    catch(error){return {m,error:error?.message||'Nieznany błąd'};}
+   }));
+   out.innerHTML='<h3>Wyniki analizy · '+results.length+' spotkań</h3>'+results.map((r,i)=>couponMatchHtml({...r,market:'all',profile:'balanced'},i)).join('')+'<p class="mm-warning">Analiza opiera się na dostępnych statystykach. Nie stanowi gwarancji wyniku.</p>';
+  }catch(error){out.innerHTML='<p class="mm-warning">'+safe(error?.message||'Nie udało się przeprowadzić analizy.')+'</p>';}
+  finally{button.dataset.running='0';button.disabled=pickedMatches.size===0;button.textContent='Analizuj ponownie →';}
+ });
+ updateCouponCount();
 }
 function addBuilder(){
  renderCouponPicker();
@@ -163,5 +186,6 @@ const matchesEl=document.querySelector('#matches'),$=id=>document.getElementById
 }
 document.querySelectorAll('.main-tab').forEach(button=>button.addEventListener('click',()=>switchMainTab(button.dataset.tab)));
 addBuilder();
+addLegacyAnalysis();
 $('performance-refresh')?.addEventListener('click',loadPerformance);
 load();refreshStatus();if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});

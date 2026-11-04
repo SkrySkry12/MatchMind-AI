@@ -14,8 +14,8 @@ function unwrapList(data){
  return [];
 }
 function team(raw={},side=''){
- const x=raw?.[side]||raw?.teams?.[side]||raw?.[side+'_team']||{};
- return {id:first(x.id,x.team_id,null),name:first(x.name,x.team_name,typeof raw?.[side]==='string'?raw[side]:null,'Nieznana drużyna'),logo:first(x.logo,x.image,x.crest,null),slug:first(x.slug,x.url_slug,null)};
+ const x=raw?.[side+'_team']||raw?.teams?.[side]||raw?.[side]||{};
+ return {id:first(x.id,x.team_id,null),name:first(x.name,x.team_name,raw?.[side+'_team_name'],raw?.[side+'_name'],typeof raw?.[side]==='string'?raw[side]:null,'Nieznana drużyna'),logo:first(x.logo,x.image,x.crest,raw?.[side+'_team_logo'],raw?.[side+'_logo'],null),slug:first(x.slug,x.url_slug,null)};
 }
 function statusOf(x){
  const raw=String(first(x.status?.short,x.status?.type,x.status,x.state,x.match_status,'upcoming')).toLowerCase();
@@ -31,8 +31,8 @@ function mapMatch(x){
  const slug=first(x.slug,x.match_slug,x.url_slug,x.id,x.match_id);
  const id=String(first(x.slug,x.match_slug,x.url_slug,x.id,x.match_id,''));
  return {
-  id,slug:String(slug||id),date:date?new Date(date).toISOString():new Date().toISOString(),
-  league:first(comp.name,comp.title,x.competition_name,x.league_name,'Pozostałe rozgrywki'),
+  id,slug:String(slug||id),date:date&&!Number.isNaN(new Date(date).getTime())?new Date(date).toISOString():new Date().toISOString(),
+  league:first(comp.name,comp.title,typeof comp==='string'?comp:null,x.competition_name,x.league_name,'Pozostałe rozgrywki'),
   leagueId:first(comp.id,comp.slug,null),season:first(comp.season,x.season,null),
   country:first(comp.country?.name,comp.country,x.country?.name,x.country,null),
   logo:first(comp.logo,comp.image,null),flag:first(comp.flag,null),

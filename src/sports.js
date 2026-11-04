@@ -77,8 +77,11 @@ function estimateProbabilities(h,a){
  const t=home+draw+away,n=Math.min(h.length,5)+Math.min(a.length,5);
  return {home:Math.round(home/t*100),draw:Math.round(draw/t*100),away:Math.round(away/t*100),source:'Model statystyczny MatchMind',confidence:n>=8?'średnia':n>=4?'niska':'bardzo niska',sampleHome:h.length,sampleAway:a.length,expectedGoals:{home:Number(hx.toFixed(2)),away:Number(ax.toFixed(2))}};
 }
+const teamPromises=new Map();
 async function teamContext(league,teamId){
  if(!teamId)return {form:[],injuries:[],notice:'Brak ID drużyny.'};
+ const promiseKey=league+':'+teamId;if(teamPromises.has(promiseKey))return teamPromises.get(promiseKey);
+ const promise=(async()=>{
  const base='/apis/site/v2/sports/soccer/'+league+'/teams/'+encodeURIComponent(teamId);
  const [schedule,injuryData]=await Promise.all([
   json(ESPN,base+'/schedule',TTL.team).catch(()=>null),
@@ -91,6 +94,7 @@ async function teamContext(league,teamId){
   status:x.status||x.type||x.details||'Status nieznany'
  })).slice(0,12);
  return {form,injuries,notice:!schedule?'Brak historii ostatnich spotkań.':!injuryData?'Brak raportu kontuzji od dostawcy.':null};
+ })();teamPromises.set(promiseKey,promise);try{return await promise;}finally{teamPromises.delete(promiseKey);}
 }
 async function enrichFixture(f){
  const [h,a]=await Promise.all([teamContext(f.leagueId,f.home.id),teamContext(f.leagueId,f.away.id)]);

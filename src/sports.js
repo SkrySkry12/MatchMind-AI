@@ -73,7 +73,7 @@ function resultForTeam(event,teamId){
  if(!own||!opp||!completed)return null;
  const gf=scoreNumber(own.score),ga=scoreNumber(opp.score);
  if(gf===null||ga===null)return null;
- return {date:val(comp.date,event.date),opponent:opp.team?.displayName||opp.team?.name||'Rywal',gf,ga,result:gf>ga?'W':gf===ga?'D':'L'};
+ return {date:val(comp.date,event.date),opponent:opp.team?.displayName||opp.team?.name||'Rywal',gf,ga,result:gf>ga?'W':gf===ga?'D':'L',venue:own.homeAway==='home'?'dom':own.homeAway==='away'?'wyjazd':'nieznane'};
 }
 function poisson(lambda,k){let p=Math.exp(-lambda);for(let i=1;i<=k;i++)p*=lambda/i;return p;}
 function estimateProbabilities(h,a){
@@ -91,7 +91,7 @@ function estimateProbabilities(h,a){
 const teamPromises=new Map();
 async function teamContext(league,teamId,includeInjuries=false,forceRefresh=false){
  if(!teamId)return {form:[],injuries:[],notice:'Brak ID drużyny.'};
- const promiseKey=league+':'+teamId+':'+includeInjuries;if(teamPromises.has(promiseKey))return teamPromises.get(promiseKey);
+ const promiseKey=league+':'+teamId+':'+includeInjuries+(forceRefresh?':fresh':'');if(teamPromises.has(promiseKey))return teamPromises.get(promiseKey);
  const promise=(async()=>{
  const base='/apis/site/v2/sports/soccer/'+league+'/teams/'+encodeURIComponent(teamId);
  const [schedule,injuryData]=await Promise.all([

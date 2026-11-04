@@ -193,6 +193,23 @@ async function espnBundle(id,forceRefresh=false){
   match:{...mapped,prediction,preMatch:{home:homeContext,away:awayContext,notices:[homeContext.notice,awayContext.notice].filter(Boolean)}},statistics,events,lineups,players:[],injuries:injuryRecords,predictions:prediction,live:mapped.status==='LIVE',
   refreshAfterSeconds:mapped.status==='LIVE'?30:null,attribution:{label:'ESPN',url:'https://www.espn.com/soccer/'}};
 }
+function sportRecords(value,keys=[]){
+ if(Array.isArray(value))return value;
+ if(value&&typeof value==='object'){for(const key of keys){if(Array.isArray(value[key]))return value[key];}return Object.entries(value).filter(([k,v])=>v&&typeof v==='object'&&!Array.isArray(v)).map(([k,v])=>({...v,team:v.team||k}));}
+ return [];
+}
+function sportPlayerName(p){return str(p?.name||p?.player_name||p?.display_name||p?.full_name||p?.athlete?.name||p?.player?.name||p?.player?.display_name,'');}
+function normalizeSportLineups(raw,d){
+ const source=raw.lineups||raw.lineup||d.lineups||d.lineup||[];
+ return sportRecords(source,['lineups','items','data']).map((entry,index)=>{
+  const players=sportRecords(entry.players||entry.roster||entry.starting||entry.starting_xi||entry.startingXI||entry.formation?.players||[],['players','items','data']).map(p=>({name:sportPlayerName(p),number:val(p.number,p.shirt_number,p.jersey_number,null),position:val(p.position,p.position_name,p.role,null),starter:p.starter??p.is_starting??null})).filter(p=>p.name);
+  return {team:str(entry.team?.name||entry.team_name||entry.name||entry.team,index===0?'Gospodarze':index===1?'Goście':'Drużyna'),formation:val(entry.formation?.name,entry.formation,entry.formation_name,null),players};
+ }).filter(x=>x.players.length||x.formation);
+}
+function normalizeSportInjuries(raw,d){
+ const source=raw.injuries||raw.absences||raw.missing_players||d.injuries||d.absences||[];
+ return sportRecords(source,['injuries','absences','items','data']).map(p=>({name:sportPlayerName(p)||str(p.player_name||p.athlete_name,'Zawodnik'),team:str(p.team?.name||p.team_name||p.team,''),status:str(p.status?.name||p.status||p.type||p.reason||p.description,'Status nieznany'),reason:str(p.reason||p.description||p.type,'')})).filter(x=>x.name);
+}
 async function sportBundle(id,forceRefresh=false){
  const slug=id.slice('sportscore:'.length);
  if(!slug||slug.length>200)throw new Error('Nieprawidłowy identyfikator SportScore.');
@@ -202,7 +219,7 @@ async function sportBundle(id,forceRefresh=false){
  if(!mapped)throw new Error('SportScore nie zwrócił kompletnych szczegółów meczu.');
  return {source:'SportScore',match:mapped,fixture:[{fixture:{status:{short:mapped.status,long:mapped.statusText}},goals:mapped.score,teams:{home:mapped.home,away:mapped.away}}],
   statistics:array(raw.statistics||raw.stats||d.statistics),events:array(raw.events||raw.timeline||d.events),
-  lineups:array(raw.lineups||d.lineups),players:[],injuries:[],predictions:null,live:mapped.status==='LIVE',
+  lineups:normalizeSportLineups(raw,d),players:[],injuries:normalizeSportInjuries(raw,d),predictions:null,live:mapped.status==='LIVE',
   attribution:{label:'Powered by SportScore',url:'https://sportscore.com/'}};
 }
 export async function getMatchBundle(id,options={}){

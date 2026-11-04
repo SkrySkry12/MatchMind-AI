@@ -1,49 +1,84 @@
 import {readCache,writeCache,cacheInfo} from './cache.js';
-const BASE=(process.env.FOOTBALL_API_BASE_URL||'https://v3.football.api-sports.io').replace(/\/$/,'');
-const TTL={fixtures:900,statistics:3600,events:1800,lineups:3600,players:3600,injuries:21600,predictions:86400};
-const demo=[{id:'demo-1',league:'Demo League',leagueId:0,season:2026,date:new Date().toISOString(),home:{name:'North City'},away:{name:'South United'},status:'NS',demo:true},{id:'demo-2',league:'Demo League',leagueId:0,season:2026,date:new Date(Date.now()+86400000).toISOString(),home:{name:'Royal FC'},away:{name:'Athletic Town'},status:'NS',demo:true}];
+
+const BASE=(process.env.SPORTSCORE_API_BASE_URL||'https://sportscore.com').replace(/\\/$/,'');
+const SOURCE='SportScore';
+const TTL={fixtures:60,match:45,standings:300,team:180};
 const stats={requests:0,cacheHits:0,staleFallbacks:0,remaining:null,limit:null};
-async function api(path,{ttl=300}={}){
- const key=process.env.FOOTBALL_API_KEY;if(!key)throw new Error('Brak FOOTBALL_API_KEY w środowisku backendu.');
- const k=path,now=Date.now(),hit=await readCache(k);
+const LIVE=new Set(['live','in_play','inplay','1h','2h','ht','et','bt','p','playing']);
+const FINISHED=new Set(['finished','complete','completed','ft','aet','pen']);
+
+function first(...values){return values.find(v=>v!==undefined&&v!==null&&v!=='');}
+function unwrapList(data){
+ if(Array.isArray(data))return data;
+ for(const key of ['fixtures','matches','results','data','items'])if(Array.isArray(data?.[key]))return data[key];
+ return [];
+}
+function team(raw={},side=''){
+ const x=raw?.[side]||raw?.teams?.[side]||raw?.[side+'_team']||{};
+ return {id:first(x.id,x.team_id,null),name:first(x.name,x.team_name,typeof raw?.[side]==='string'?raw[side]:null,'Nieznana drużyna'),logo:first(x.logo,x.image,x.crest,null),slug:first(x.slug,x.url_slug,null)};
+}
+function statusOf(x){
+ const raw=String(first(x.status?.short,x.status?.type,x.status,x.state,x.match_status,'upcoming')).toLowerCase();
+ if(LIVE.has(raw)||raw.includes('live'))return 'LIVE';
+ if(FINISHED.has(raw)||raw.includes('finish')||raw.includes('complete'))return 'FT';
+ if(raw==='postponed'||raw==='cancelled'||raw==='canceled')return raw.toUpperCase();
+ return 'NS';
+}
+function mapMatch(x){
+ const home=team(x,'home'),away=team(x,'away');
+ const date=first(x.date,x.start_time,x.kickoff,x.datetime,x.time,null);
+ const comp=x.competition||x.league||x.tournament||{};
+ const slug=first(x.slug,x.match_slug,x.url_slug,x.id,x.match_id);
+ const id=String(first(x.id,x.match_id,slug,''));
+ return {
+  id,slug:String(slug||id),date:date?new Date(date).toISOString():new Date().toISOString(),
+  league:first(comp.name,comp.title,x.competition_name,x.league_name,'Pozostałe rozgrywki'),
+  leagueId:first(comp.id,comp.slug,null),season:first(comp.season,x.season,null),
+  country:first(comp.country?.name,comp.country,x.country?.name,x.country,null),
+  logo:first(comp.logo,comp.image,null),flag:first(comp.flag,null),
+  round:first(x.round,x.stage,null),status:statusOf(x),
+  statusText:first(x.status_text,x.status?.text,x.status?.long,null),
+  home,away,venue:first(x.venue?.name,x.venue,null),
+  elapsed:first(x.minute,x.elapsed,x.time_elapsed,null),
+  score:{home:first(x.home_score,x.score?.home,x.scores?.home,x.home?.score,null),away:first(x.away_score,x.score?.away,x.scores?.away,x.away?.score,null)},
+  prediction:null,source:SOURCE
+ };
+}
+async function request(path,{ttl=60}={}){
+ const key='sportscore:'+path,now=Date.now(),hit=await readCache(key);
  if(hit&&hit.expires>now){stats.cacheHits++;return hit.data;}
  try{
-  const response=await fetch(BASE+path,{headers:{'x-apisports-key':key},signal:AbortSignal.timeout(12000)});stats.requests++;
-  stats.remaining=response.headers.get('x-ratelimit-requests-remaining');stats.limit=response.headers.get('x-ratelimit-requests-limit');
-  if(!response.ok)throw new Error('API-FOOTBALL HTTP '+response.status);
-  const data=await response.json();if(data.errors&&Object.keys(data.errors).length)throw new Error('API-FOOTBALL: '+JSON.stringify(data.errors));
-  await writeCache(k,data,ttl);return data;
+  const response=await fetch(BASE+path,{headers:{accept:'application/json','user-agent':'MatchMind-AI/1.0 (+https://sportscore.com/developers/)','cache-control':'no-cache'},signal:AbortSignal.timeout(12000)});
+  stats.requests++;
+  if(!response.ok)throw new Error('SportScore HTTP '+response.status);
+  const data=await response.json();
+  await writeCache(key,data,ttl);return data;
  }catch(error){if(hit){stats.staleFallbacks++;return hit.data;}throw error;}
 }
-export function getApiUsage(){return {...stats,...cacheInfo(),configured:Boolean(process.env.FOOTBALL_API_KEY)};}
-function mapFixture(x){return {id:String(x.fixture.id),date:x.fixture.date,league:x.league.name,leagueId:x.league.id,season:x.league.season,country:x.league.country,logo:x.league.logo,flag:x.league.flag,round:x.league.round,status:x.fixture.status.short,home:{id:x.teams.home.id,name:x.teams.home.name,logo:x.teams.home.logo},away:{id:x.teams.away.id,name:x.teams.away.name,logo:x.teams.away.logo},venue:x.fixture.venue?.name,elapsed:x.fixture.status.elapsed};}
-async function attachPrediction(match){
- if(!match.id||match.id.startsWith('demo')||!['NS','TBD'].includes(match.status))return match;
- try{
-  const d=await api('/predictions?fixture='+encodeURIComponent(match.id),{ttl:TTL.predictions});
-  const p=d.response?.[0]?.predictions;if(!p)return {...match,prediction:null};
-  const percent=p.percent||{};
-  const values=[Number.parseFloat(percent.home),Number.parseFloat(percent.draw),Number.parseFloat(percent.away)];
-  const valid=values.every(Number.isFinite)&&values.reduce((a,b)=>a+b,0)>0;
-  const best=valid?['home','draw','away'][values.indexOf(Math.max(...values))]:null;
-  return {...match,prediction:{home:valid?values[0]:null,draw:valid?values[1]:null,away:valid?values[2]:null,favorite:best,winner:p.winner?.name||null,advice:p.advice||null,underOver:p.under_over||null,source:'API-FOOTBALL',confidence:valid?Math.max(...values):null,comparison:d.response?.[0]?.comparison||null}};
- }catch(error){return {...match,prediction:null,predictionError:'Szacunek chwilowo niedostępny'};}
-}
+export function getApiUsage(){return {...stats,...cacheInfo(),configured:true,provider:SOURCE,remaining:null,limit:'~10 000 zapytań / 24 h / IP'};}
+
 export async function getFixtures(date){
- const d=date||new Date().toISOString().slice(0,10),data=await api('/fixtures?date='+encodeURIComponent(d),{ttl:TTL.fixtures});
- const fixtures=(data.response||[]).map(mapFixture);
- let cursor=0;const workers=Array.from({length:Math.min(4,fixtures.length)},async()=>{while(cursor<fixtures.length){const i=cursor++;fixtures[i]=await attachPrediction(fixtures[i]);}});
- await Promise.all(workers);
- return {source:'API-FOOTBALL',fixtures};
+ const day=date||new Date().toISOString().slice(0,10);
+ const data=await request('/api/v1/fixtures/?sport=football&date='+encodeURIComponent(day)+'&limit=200',{ttl:TTL.fixtures});
+ const fixtures=unwrapList(data).map(mapMatch).filter(m=>m.id&&m.home.name!=='Nieznana drużyna'&&m.away.name!=='Nieznana drużyna');
+ fixtures.sort((a,b)=>new Date(a.date)-new Date(b.date));
+ return {source:SOURCE,fixtures,updated:first(data.updated,null),attribution:{label:'Powered by SportScore',url:'https://sportscore.com/'}};
 }
-export async function getFixtureStats(id){const data=await api('/fixtures/statistics?fixture='+encodeURIComponent(id),{ttl:TTL.statistics});return {source:'API-FOOTBALL',stats:data.response||[]};}
+
+export async function getFixtureStats(id){
+ const bundle=await getMatchBundle(id);
+ return {source:SOURCE,stats:bundle.statistics||[],events:bundle.events||[]};
+}
+
 export async function getMatchBundle(id){
- const q='?fixture='+encodeURIComponent(id);
- const fixtureData=await api('/fixtures'+q,{ttl:20});
- const fixture=fixtureData.response||[];
- const status=fixture[0]?.fixture?.status?.short||'NS';
- const live=['1H','HT','2H','ET','BT','P','LIVE'].includes(status);
- const endpoints=[['statistics','/fixtures/statistics'+q,live?25:status==='NS'||status==='TBD'?300:3600],['events','/fixtures/events'+q,live?20:status==='NS'||status==='TBD'?300:3600],['lineups','/fixtures/lineups'+q,live?60:1800],['players','/fixtures/players'+q,live?60:1800],['injuries','/injuries'+q,14400],['predictions','/predictions'+q,86400]];
- const entries=await Promise.all(endpoints.map(async([name,path,ttl])=>{try{const r=await api(path,{ttl});return [name,r?.response??[]];}catch(error){return [name,{unavailable:true,reason:error.message}];}}));
- return {source:'API-FOOTBALL',fixture,...Object.fromEntries(entries),live,refreshAfterSeconds:live?25:null};
+ const slug=String(id||'').trim();
+ if(!slug||slug.length>200)throw new Error('Nieprawidłowy identyfikator meczu.');
+ const data=await request('/api/widget/match/?sport=football&slug='+encodeURIComponent(slug),{ttl:TTL.match});
+ const raw=data.match||data.fixture||data.data||data;
+ const mapped=mapMatch(raw);
+ const timeline=first(raw.timeline,raw.events,raw.incidents,data.timeline,data.events,[]);
+ const lineups=first(raw.lineups,raw.lineup,data.lineups,[]);
+ const statistics=first(raw.statistics,raw.stats,data.statistics,data.stats,[]);
+ const status=statusOf(raw);
+ return {source:SOURCE,fixture:[{...raw,fixture:{status:{short:status,long:first(raw.status_text,raw.status?.text,status)}},goals:{home:mapped.score.home,away:mapped.score.away},teams:{home:mapped.home,away:mapped.away}}],match:mapped,statistics,events:Array.isArray(timeline)?timeline:[],lineups:Array.isArray(lineups)?lineups:[],players:[],injuries:[],predictions:null,live:status==='LIVE',refreshAfterSeconds:status==='LIVE'?30:null,attribution:{label:'Powered by SportScore',url:'https://sportscore.com/'}};
 }

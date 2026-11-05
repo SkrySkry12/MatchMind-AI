@@ -34,7 +34,7 @@ function compactEvidence(evidence){
  const m=evidence.match,pre=m.match?.preMatch,teams={};
  for(const [side,label] of [['home','Gospodarze'],['away','Goście']]){
   const ctx=pre?.[side]||{},form=Array.isArray(ctx.form)?ctx.form:[],summary=summarizeForm(form);
-  teams[side]={label,team:m.match?.[side]?.name||m.match?.[side]?.name||label,form:form.map(x=>({date:x.date,opponent:x.opponent,result:x.result,goalsFor:x.gf,goalsAgainst:x.ga,venue:x.venue})),summary,injuries:(ctx.injuries||[]).map(x=>({name:x.name,status:x.status})),notice:ctx.notice||null};
+  teams[side]={label,team:m.match?.[side]?.name||m.match?.[side]?.name||label,overall:ctx.overall||null,formString:ctx.formString||'',form:form.map(x=>({date:x.date,opponent:x.opponent,result:x.result,goalsFor:x.gf,goalsAgainst:x.ga,venue:x.venue})),summary,injuries:(ctx.injuries||[]).map(x=>({name:x.name,status:x.status})),notice:ctx.notice||null};
  }
  return {match:{home:m.match?.home?.name||m.match?.home?.displayName,away:m.match?.away?.name||m.match?.away?.displayName,league:m.match?.league,venue:m.match?.venue,prediction:m.match?.prediction||m.predictions},teams,seasonStats:readableSeasonStats(m.statistics),lineupCount:m.lineups?.length||0,injuryCount:m.injuries?.length||0,notices:pre?.notices||[],manualStatsCount:evidence.manual?.length||0};
 }
@@ -51,7 +51,7 @@ function deterministicSummary(evidence){
     if(s.home||s.away)parts.push(t.label+' — rozdział lokalizacji: u siebie '+(s.home?s.home.pointsPerMatch+' pkt/mecz, gole '+s.home.goalsFor+':'+s.home.goalsAgainst:'brak próbki')+'; na wyjeździe '+(s.away?s.away.pointsPerMatch+' pkt/mecz, gole '+s.away.goalsFor+':'+s.away.goalsAgainst:'brak próbki')+'.');
    parts.push(t.label+' — dodatkowe wskaźniki: czyste konta '+s.cleanSheets+'/'+s.matches+', bez zdobytej bramki '+s.failedToScore+'/'+s.matches+', obie drużyny strzelały '+s.btts+'/'+s.matches+', over 2.5 gola '+s.over25+'/'+s.matches+'. Trend punktowy ostatnich 3 spotkań: '+s.trend+'.');
    if(f.length)parts.push(t.label+' — wyniki chronologicznie od najnowszego: '+f.map(x=>x.result+' '+x.goalsFor+':'+x.goalsAgainst+' vs '+x.opponent+(x.venue?' ('+x.venue+')':'')).join('; ')+'.');
-  }else parts.push(t.label+': brak wystarczającej historii wyników.');
+  }else if(t.overall?.matches){const o=t.overall;parts.push(t.label+' — ostatnie '+o.matches+' zakończonych meczów w Ekstraklasie: '+(o.won??'?')+' zwycięstw, '+(o.drawn??'?')+' remisów, '+(o.lost??'?')+' porażek; gole '+(o.goals_for??'?')+':'+(o.goals_against??'?')+'; punkty na mecz '+(o.points_per_match??'?')+'. Seria od najnowszego: '+(t.formString||'brak danych')+'.');}else parts.push(t.label+': brak wystarczającej historii wyników.');
   if(t.injuries.length)parts.push(t.label+' — zgłoszone absencje: '+t.injuries.map(x=>x.name+' ('+x.status+')').join(', ')+'.');
   else parts.push(t.label+' — brak potwierdzonych danych o absencjach; nie oznacza to pełnego składu.');
  }
